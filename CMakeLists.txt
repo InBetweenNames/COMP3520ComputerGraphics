@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.12)
 
 project(SDL2TemplateCMake)
 
@@ -13,7 +13,7 @@ target_include_directories(main
 		PRIVATE		
 		${CMAKE_CURRENT_SOURCE_DIR}
 		PUBLIC
-		${SDL2_INCLUDE_DIR}
+		${SDL2_INCLUDE_DIRS}
 		${SDL2_TTF_INCLUDE_DIR}
 )
 
@@ -27,6 +27,6 @@ target_compile_features(main PRIVATE cxx_std_17)
 
 target_link_libraries(main
 		PUBLIC
-		${SDL2_LIBRARY}
+		${SDL2_LIBRARIES}
 		${SDL2_TTF_LIBRARY}
 		)
