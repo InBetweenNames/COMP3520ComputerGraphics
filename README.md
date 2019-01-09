@@ -4,6 +4,8 @@ UWindsor COMP-3520 SDL2 Project Template (CMake version)
 This template is intended for students in the COMP-3520 Introduction to Computer Graphics course
 at the University of Windsor, however it should serve as a useful template for anyone interested in
 getting started with the [SDL2](http://libsdl.org/) library quickly on non-Windows platforms.
+In contrast to the [Visual Studio template](https://github.com/InBetweenNames/SDL2Template), this version
+uses dynamic linking by default and uses your installed system libraries.
 
 The following dependencies are required:
 * [CMake](https://cmake.org/)
