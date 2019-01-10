@@ -36,23 +36,23 @@ endif()
 
 
 target_include_directories(main
-		PRIVATE		
-		${CMAKE_CURRENT_SOURCE_DIR}
-		PUBLIC
-		${SDL2_INCLUDE_DIRS}
-		${SDL2_TTF_INCLUDE_DIR}
+  PRIVATE   
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  SYSTEM PUBLIC
+  ${SDL2_INCLUDE_DIRS}
+  ${SDL2_TTF_INCLUDE_DIR}
 )
 
 target_compile_options(main
-		PRIVATE
-		-Wall
-		-Werror
+  PRIVATE
+  $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-Wall;-Werror>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
 target_compile_features(main PRIVATE cxx_std_17)
 
 target_link_libraries(main
-		PUBLIC
-		${SDL2_LIBRARIES}
-		${SDL2_TTF_LIBRARY}
-		)
+  PUBLIC
+  ${SDL2_LIBRARIES}
+  ${SDL2_TTF_LIBRARY}
+)
