@@ -1,7 +1,7 @@
 Iosevka is a free font which is available here:
 https://github.com/be5invis/Iosevka
 
-It's licence is reproduced below:
+Its licence is reproduced below:
 ---
 
 The font is licensed under SIL OFL Version 1.1.
