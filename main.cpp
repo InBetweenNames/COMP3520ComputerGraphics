@@ -123,7 +123,7 @@ int main(int argc, char* args[]) {
 
 	//Wait for input on the command line
 	puts("Press any key in the terminal to exit");
-	int const input = getchar();
+	getchar();
 
 	//VERY IMPORTANT: free your resources when you are done with them.
 	SDL_DestroyTexture(texture);
