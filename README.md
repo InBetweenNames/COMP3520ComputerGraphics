@@ -60,10 +60,25 @@ Note that `iosevka-regular.ttf` must be in the working directory of `main` for i
 In practice, this means you need to be in the `build` directory when running `main`.
 I would welcome a pull request that removes this restriction.
 
+Setup for Emscripten
+---
+
+This template now supports building using [Emscripten] (https://kripken.github.io/emscripten-site/) for compiling your SDL2-based
+C or C++ code directly to your web browser using WebAssembly.  To use it, ensure you have the [Emscripten SDK](https://github.com/emscripten-core/emsdk)
+installed and in your PATH (use `emsdk install` and `emsdk activate`, following all instructions), and then:
+
+~~~
+cd build-wasm
+./build_with_emscripten.sh
+<your web browser of choice> main.html
+~~~
+
+Now your code is portably running in web browsers.  Cool!
+
 The demo
 ---
 
-The sample code provided should display "Hello World!" in a window on your screen when run.
+The demo code will change periodically to help you with your newest assignments.
 You can clone this project as many times as you need for different assignments.
 
 Recommended practices
