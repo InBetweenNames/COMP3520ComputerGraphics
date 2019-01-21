@@ -63,7 +63,7 @@ I would welcome a pull request that removes this restriction.
 Setup for Emscripten
 ---
 
-This template now supports building using [Emscripten] (https://kripken.github.io/emscripten-site/) for compiling your SDL2-based
+This template now supports building using [Emscripten](https://kripken.github.io/emscripten-site/) for compiling your SDL2-based
 C or C++ code directly to your web browser using WebAssembly.  To use it, ensure you have the [Emscripten SDK](https://github.com/emscripten-core/emsdk)
 installed and in your PATH (use `emsdk install` and `emsdk activate`, following all instructions), and then:
 
