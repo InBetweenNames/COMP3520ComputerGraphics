@@ -44,7 +44,7 @@ target_compile_features(main PRIVATE cxx_std_17)
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   set(CMAKE_EXECUTABLE_SUFFIX ".html") 
-  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s WASM=1 --preload-file iosevka-regular.ttf")
+  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s WASM=1 --preload-file iosevka-regular.ttf --preload-file sky.bmp --preload-file floor.bmp")
   set_target_properties(main PROPERTIES LINK_FLAGS "${ECXXFLAGS} --emrun")
   set_target_properties(main PROPERTIES COMPILE_FLAGS "${ECXXFLAGS}")
 else ()
@@ -56,6 +56,9 @@ else ()
   target_include_directories(main
     PRIVATE   
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  
+  target_include_directories(main
     SYSTEM PUBLIC
     ${SDL2_INCLUDE_DIRS}
     ${SDL2_TTF_INCLUDE_DIR}
