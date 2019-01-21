@@ -54,8 +54,11 @@ else ()
   find_package(SDL2_ttf REQUIRED)
 
   target_include_directories(main
-    PRIVATE   
+    PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+
+  target_include_directories(main
     SYSTEM PUBLIC
     ${SDL2_INCLUDE_DIRS}
     ${SDL2_TTF_INCLUDE_DIR}
