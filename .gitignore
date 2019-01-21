@@ -12,4 +12,8 @@ CTestTestfile.cmake
 *.lib
 *.a
 *.so
+*.js
+*.wasm
+*.html
+*.data
 main
