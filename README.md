@@ -70,10 +70,9 @@ installed and in your PATH (use `emsdk install` and `emsdk activate`, following 
 ~~~
 cd build-wasm
 ./build_with_emscripten.sh
-<your web browser of choice> main.html
 ~~~
 
-Now your code is portably running in web browsers.  Cool!
+This will configure, compile, link, and run your project directly in your web browser.
 
 The demo
 ---

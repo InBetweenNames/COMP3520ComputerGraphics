@@ -45,7 +45,7 @@ target_compile_features(main PRIVATE cxx_std_17)
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   set(CMAKE_EXECUTABLE_SUFFIX ".html") 
   set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s WASM=1 --preload-file iosevka-regular.ttf")
-  set_target_properties(main PROPERTIES LINK_FLAGS "${ECXXFLAGS}")
+  set_target_properties(main PROPERTIES LINK_FLAGS "${ECXXFLAGS} --emrun")
   set_target_properties(main PROPERTIES COMPILE_FLAGS "${ECXXFLAGS}")
 else ()
 

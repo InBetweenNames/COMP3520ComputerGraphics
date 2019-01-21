@@ -9,3 +9,4 @@ fi
 
 emcmake cmake ..
 cmake --build .
+emrun main.html
