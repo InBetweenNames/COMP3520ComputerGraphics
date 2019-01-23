@@ -8,6 +8,12 @@ This branch contains source code for some 2.5D rendering functions written
 for software rendering.  The code needs a bit of cleaning up, but otherwise
 should work fine.  Pull requests are welcome to improve the code.
 
+The code is written in mostly C such that students without a C++ background
+can more easily understand it.  There are some parts that need to be overhauled,
+like the conversion from floating point coordinates to integer coordinates.
+However, the basic ideas should be evident.  In class, we'll discuss how
+this would have been implemented using fixed-point arithmetic.
+
 A live demo compiled using Emscripten and WebAssembly is available [here](https://inbetweennames.github.io/SDL2TemplateCMake/)
 
 Controls:
