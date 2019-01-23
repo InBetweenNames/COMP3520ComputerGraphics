@@ -263,13 +263,7 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
 
   // Uint16 pitch = surface->pitch;
 
-  uint32_t uinttx, uintty;
-
   while (count >= 0) {
-
-    // Cast to integers
-    uinttx = tx;
-    uintty = ty;
 
     /*remainder by 64 division
    (this is roughly what DOOM did
@@ -312,8 +306,10 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
    
 
    Fortunately, when casting to unsigned integers, it wraps from the highest
-   number, giving us the desired behaviour.
-   
+   number, giving us the desired behaviour.  So, first cast to int32_t to
+   remove fractional part (floor) while preserving sign, then cast to uint32_t
+   to get 2's complement semantics on all architectures, leading to the desired behaviour.
+   Note: emscripten complains if a direct conversion to uint32_t is attempted and it's negative.
 
    Now, if we only take the first 6 bits, then
    this decrease is still present, AND we're counting backwards
@@ -332,8 +328,8 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
    flipped to solve this, or subtract by 64 for positive case and
    not for the negative case.
    */
-    uintty = uintty & 0x3F;
-    uinttx = uinttx & 0x3F;
+    uint32_t uintty = uint32_t(int32_t(ty)) & 0x3F;
+    uint32_t uinttx = uint32_t(int32_t(tx)) & 0x3F;
 
     uint32_t *src = ((Uint32 *)tex->pixels) + uintty * 64 + uinttx;
 
