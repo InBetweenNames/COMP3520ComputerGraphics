@@ -8,6 +8,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+static constexpr float mouseSensitivity = 1;
 #else
 
 uint32_t game_running = 0;
@@ -44,6 +45,8 @@ void emscripten_set_main_loop_arg(void (*fcn)(void *), void *const arg,
     }
   }
 }
+
+static constexpr float mouseSensitivity = 0.1;
 #endif
 
 struct GameResources {
@@ -88,7 +91,7 @@ struct direction {
   float px;
   float py;
 
-  // Normal vector
+  // Normal vector (must point east in screenspace)
   float nx;
   float ny;
 
@@ -105,15 +108,16 @@ struct direction {
 
   // Player speed
   float speed; // Units per millisecond
-} dir = {1.0, 0.0, 0.0, 1.0, 0.0f, 0.0f, 0.0f, 80.0f, 400.0f, 192.0f / 1000.0f};
+} dir = {1.0,  0.0,  0.0,   -1.0,   0.0f,
+         0.0f, 0.0f, 80.0f, 400.0f, 192.0f / 1000.0f};
 
 void MovePlayer(int timediff) {
 
-  dir.px = cos((dir.theta / 180) * M_PI);
-  dir.py = sin((dir.theta / 180) * M_PI);
+  dir.px = std::cos((dir.theta / 180) * M_PI);
+  dir.py = std::sin((dir.theta / 180) * M_PI);
 
-  dir.nx = -dir.py;
-  dir.ny = dir.px;
+  dir.nx = dir.py;
+  dir.ny = -dir.px;
 
   // Travel along normal
   dir.xpos += move.xdiff * dir.speed * timediff * dir.nx;
@@ -159,7 +163,7 @@ int ProcessEvent(uint32_t windowID) {
       break;
 
     case SDL_QUIT:
-      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_QUIT!\n");
+      SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL_QUIT!\n");
       return 0; // 0 -- signal terminate program
 
     case SDL_KEYUP:
@@ -204,7 +208,17 @@ int ProcessEvent(uint32_t windowID) {
     case SDL_MOUSEMOTION:
 
       if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
-        dir.theta += event.motion.xrel;
+        // dir.theta += event.motion.xrel;
+        // xrel: west negative, east positive
+        // yrel: north negative, south positive
+
+        // Use negative to map positive to west and negative to east (right
+        // handed system)
+        float const worldPixelAngle =
+            180.0 *
+            (std::atan2(float(event.motion.xrel) * mouseSensitivity, dir.cpos) /
+             M_PI);
+        dir.theta -= worldPixelAngle;
         // Ugly, but it works
         dir.theta /= 360;
         dir.theta = dir.theta - floor(dir.theta);
@@ -227,18 +241,17 @@ int ProcessEvent(uint32_t windowID) {
 // 0 <= y < surface->h.
 void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
 
-  int yorig = y;
-  int x1orig = x1;
+  uint32_t *dst = ((uint32_t *)surface->pixels) + (surface->w) * y + x1;
 
-  y = y - surface->h / 2;   // Bottom of screen is positive
-  x1 = x1 - surface->w / 2; // Right of screen is positive
-  x2 = x2 - surface->w / 2; // Right of screen is positive
+  int count = x2 - x1;
+
+  y = y - surface->h / 2;   // South of screen is positive
+  x1 = x1 - surface->w / 2; // West of screen is negative
+  x2 = x2 - surface->w / 2; // East of screen is positive
 
   //(tx, ty) = (h/y)(c*d + x*n) + pos
   float ty = (dir.hpos / y) * (dir.cpos * dir.py + x1 * dir.ny) + dir.ypos;
   float tx = (dir.hpos / y) * (dir.cpos * dir.px + x1 * dir.nx) + dir.xpos;
-
-  int count = x2 - x1;
 
   //(dx, dy) = (h/y)(n)
   float xfrac = (dir.hpos / y) * (dir.nx);
@@ -250,38 +263,33 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
 
   // Uint16 pitch = surface->pitch;
 
-  Uint32 *dst = ((Uint32 *)surface->pixels) + (surface->w) * yorig + x1orig;
-
-  Uint32 *src = NULL;
-
-  int inttx, intty;
+  uint32_t uinttx, uintty;
 
   while (count >= 0) {
 
     // Cast to integers
-    inttx = tx;
-    intty = ty;
+    uinttx = tx;
+    uintty = ty;
 
     /*remainder by 64 division
-   (this is what DOOM did, it looks like!
+   (this is roughly what DOOM did
    Only they used the actual decimal 63 instead of 3F.
-   
 
-   Description: (this is pretty genius of Carmack)
+   Description:
 
    As we know, a division by 64 is a shift right by 6 bits.
    And a multiplication by 64 is a shift left by 6 bits.
 
    So, the remainder of a division, which would be expressed by
    x = x - 64*(x/64)
-   
+
 
    can be converted into
    x = x - (x >> 6 << 6)
    Now, since we know that the lower 6 bits have no choice but to
    be 0, we can optimize this by doing the following:
    x = x - (x & 0xFFFFFFC0)
-   
+   
 
    which will subtract x by itself without it's lower 6 bits.
 
@@ -295,43 +303,27 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
    positive numbers.
 
    But, that's not too useful to us, is it?  I mean, we have negative
-
    numbers in our texture coordinates.  Take (-1, 0), for instance.
    What do we do?  We'd like our result to be (63, 0) on the texture,
    because the texture is aligned to the XY axis and starting at
    (0,0).  Therefore we count from the right for the texture instead
    of the left, for negative numbers.  We, in other words, add 64
-   to the negative numbers.  But this is inefficient.  We'd have to
-   do a branch and add, like such:
-   
+   to the negative numbers.
+   
 
-   if (coord < 0) coord += 64;
-
-   That's no fun. But, it turns out that the and by 0x3F works even for
-   negative numbers!  For our purposes, anyway.
-   
-
-   Here's why:
-
-   If inttx is negative, because of the way the two's
-   complement works, the more negative you go, the less
-   the 'positive' part of the number will be (the part of the
-   number without the sign bit).  Example:
-   -1 = 0xFFFFFFFF -> translates to 0x7FFFFFF with the sign
-   bit off
-   -2 = 0xFFFFFFFE -> translates to 0x7FFFFFE, a DECREASE from
-   0x7FFFFFFF.
+   Fortunately, when casting to unsigned integers, it wraps from the highest
+   number, giving us the desired behaviour.
+   
 
    Now, if we only take the first 6 bits, then
    this decrease is still present, AND we're counting backwards
    from 64!  Exactly what we want!
-   
+   
 
    Example:
 
-   -5 = 0xFFFFFFFB
+   -5 (int) = 0xFFFFFFFB (uint32_t)
    0xFFFFFFFB & 0x0000003F = 0x00000003B = 59
- 
 
    This operation therefore accepts any XY coordinate
    and determines where in the texture it lies.
@@ -340,10 +332,10 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
    flipped to solve this, or subtract by 64 for positive case and
    not for the negative case.
    */
-    intty = intty & 0x3F;
-    inttx = inttx & 0x3F;
+    uintty = uintty & 0x3F;
+    uinttx = uinttx & 0x3F;
 
-    src = ((Uint32 *)tex->pixels) + intty * 64 + inttx;
+    uint32_t *src = ((Uint32 *)tex->pixels) + uintty * 64 + uinttx;
 
     *dst = *src;
     // Increment
@@ -351,7 +343,7 @@ void DrawSpan(SDL_Surface *surface, SDL_Surface *tex, int x1, int x2, int y) {
     tx += xfrac;
     ty += yfrac;
 
-    count--;
+    --count;
   }
 }
 
@@ -379,13 +371,15 @@ void Draw(GameResources *res, uint32_t const frameTime[2]) {
 
   // Render sky
   for (size_t i = 0; i < (size_t)display->w; ++i) {
-    // TODO: determine based on c and direction where to paint the sky
     // Treat sky as being projected in a cylinder, with deformation happening
-    // around the edges of the screen The sky wraps around the cylinder entirely.
+    // around the edges of the screen.
+    // The sky is wrapped around the cylinder 4 times (every 90 degrees the
+    // image repeats)
 
+    // Recall: left side of screen corresponds to +ve
     float worldPixelAngle =
         dir.theta +
-        180.0 * (std::atan2(double(i) - (display->w / 2.0), dir.cpos) / M_PI);
+        180.0 * (std::atan2((display->w / 2.0) - i, dir.cpos) / M_PI);
     if (worldPixelAngle < 0.0) {
       worldPixelAngle += 360.0;
     } else if (worldPixelAngle > 360.0) // UGLY, but it works
@@ -442,7 +436,7 @@ void GameLoop(void *const arg) {
   if (ProcessEvent(res->windowID) == 0) {
     FreeGameResources(res);
     emscripten_cancel_main_loop();
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Exiting!\n");
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Exiting!\n");
     SDL_Quit();
     std::exit(0); // Reason for not plain returning: emscripten won't call
                   // global destructors when main or the main loop exits.
