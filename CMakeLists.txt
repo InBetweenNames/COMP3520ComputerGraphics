@@ -38,8 +38,8 @@ target_compile_options(main
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
-#Default to C++17 -- no effect on C code
-target_compile_features(main PRIVATE cxx_std_17)
+#Default to C++14 -- no effect on C code (emscripten is limited to C++14 for now)
+target_compile_features(main PUBLIC cxx_std_14)
 
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
