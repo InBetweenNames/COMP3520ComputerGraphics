@@ -1,6 +1,26 @@
 UWindsor COMP-3520 SDL2 Project Template (CMake version)
 ===
 
+Floordemo branch
+---
+
+This branch contains source code for some 2.5D rendering functions written
+for software rendering.  The code needs a bit of cleaning up, but otherwise
+should work fine.  Pull requests are welcome to improve the code.
+
+A live demo compiled using Emscripten and WebAssembly is available [here](https://inbetweennames.github.io/SDL2TemplateCMake/)
+
+Controls:
+---
+
+Mouse - look left/right
+W, A, S, D - move forwards, backwards, upwards, downwards
+T, G -- raise and lower height
+Y, H -- adjust focal distance (distance to screen plane)
+
+Template
+---
+
 This template is intended for students in the COMP-3520 Introduction to Computer Graphics course
 at the University of Windsor, however it should serve as a useful template for anyone interested in
 getting started with the [SDL2](http://libsdl.org/) library quickly on non-Windows platforms.
