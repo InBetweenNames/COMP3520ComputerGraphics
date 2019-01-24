@@ -110,13 +110,13 @@ struct direction {
 
   // Player speed
   float speed; // Units per millisecond
-} dir = {1.0,  0.0,  0.0,   -1.0,   0.0f,
+} dir = {1.0f,  0.0f,  0.0f,   -1.0f,   0.0f,
          0.0f, 0.0f, 80.0f, 400.0f, 192.0f / 1000.0f};
 
 void MovePlayer(int timediff) {
 
-  dir.px = std::cosf((dir.theta / 180) * M_PI_F);
-  dir.py = std::sinf((dir.theta / 180) * M_PI_F);
+  dir.px = std::cos((dir.theta / 180.0f) * M_PI_F);
+  dir.py = std::sin((dir.theta / 180.0f) * M_PI_F);
 
   dir.nx = dir.py;
   dir.ny = -dir.px;
@@ -218,13 +218,13 @@ int ProcessEvent(uint32_t windowID) {
         // handed system)
         float const worldPixelAngle =
             180.0f *
-            (std::atan2f(float(event.motion.xrel) * mouseSensitivity, dir.cpos) /
+            (std::atan2(float(event.motion.xrel) * mouseSensitivity, dir.cpos) /
              M_PI_F);
         dir.theta -= worldPixelAngle;
         // Ugly, but it works
-        dir.theta /= 360;
+        dir.theta /= 360.0f;
         dir.theta = dir.theta - floor(dir.theta);
-        dir.theta *= 360;
+        dir.theta *= 360.0f;
       }
 
       break;
@@ -377,21 +377,21 @@ void Draw(GameResources *res, uint32_t const frameTime[2]) {
     // Recall: left side of screen corresponds to +ve
     float worldPixelAngle =
         dir.theta +
-        180.0f * (std::atan2f((display->w / 2.0f) - i, dir.cpos) / M_PI_F);
-    if (worldPixelAngle < 0.0) {
-      worldPixelAngle += 360.0;
-    } else if (worldPixelAngle > 360.0) // UGLY, but it works
+        180.0f * (std::atan2((display->w / 2.0f) - i, dir.cpos) / M_PI_F);
+    if (worldPixelAngle < 0.0f) {
+      worldPixelAngle += 360.0f;
+    } else if (worldPixelAngle > 360.0f) // UGLY, but it works
     {
-      worldPixelAngle /= 360.0;
+      worldPixelAngle /= 360.0f;
       worldPixelAngle -= std::floor(worldPixelAngle);
-      worldPixelAngle *= 360.0;
+      worldPixelAngle *= 360.0f;
     }
 
-    // float const mirroredCoord = worldPixelAngle > 180.0 ? (1.0 -
-    // (worldPixelAngle - 180.0) / 180.0) : (worldPixelAngle / 180.0);
+    // float const mirroredCoord = worldPixelAngle > 180.0f ? (1.0f -
+    // (worldPixelAngle - 180.0f) / 180.0f) : (worldPixelAngle / 180.0f);
 
     float const finalCoord =
-        (worldPixelAngle / 90.0f) - std::floorf(worldPixelAngle / 90.0f);
+        (worldPixelAngle / 90.0f) - std::floor(worldPixelAngle / 90.0f);
 
     DrawColumn(display, res->skyTranspose, i, 0, display->h / 2 + 1,
                size_t(finalCoord * float(res->skyTranspose->h)), 0, res->skyTranspose->w);
