@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#define M_PI_F 3.14159265358979323846264338327950288f
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 static constexpr float mouseSensitivity = 1;
@@ -46,7 +48,7 @@ void emscripten_set_main_loop_arg(void (*fcn)(void *), void *const arg,
   }
 }
 
-static constexpr float mouseSensitivity = 0.1;
+static constexpr float mouseSensitivity = 0.1f;
 #endif
 
 struct GameResources {
@@ -113,8 +115,8 @@ struct direction {
 
 void MovePlayer(int timediff) {
 
-  dir.px = std::cos((dir.theta / 180) * M_PI);
-  dir.py = std::sin((dir.theta / 180) * M_PI);
+  dir.px = std::cosf((dir.theta / 180) * M_PI_F);
+  dir.py = std::sinf((dir.theta / 180) * M_PI_F);
 
   dir.nx = dir.py;
   dir.ny = -dir.px;
@@ -215,9 +217,9 @@ int ProcessEvent(uint32_t windowID) {
         // Use negative to map positive to west and negative to east (right
         // handed system)
         float const worldPixelAngle =
-            180.0 *
-            (std::atan2(float(event.motion.xrel) * mouseSensitivity, dir.cpos) /
-             M_PI);
+            180.0f *
+            (std::atan2f(float(event.motion.xrel) * mouseSensitivity, dir.cpos) /
+             M_PI_F);
         dir.theta -= worldPixelAngle;
         // Ugly, but it works
         dir.theta /= 360;
@@ -375,7 +377,7 @@ void Draw(GameResources *res, uint32_t const frameTime[2]) {
     // Recall: left side of screen corresponds to +ve
     float worldPixelAngle =
         dir.theta +
-        180.0 * (std::atan2((display->w / 2.0) - i, dir.cpos) / M_PI);
+        180.0f * (std::atan2f((display->w / 2.0f) - i, dir.cpos) / M_PI_F);
     if (worldPixelAngle < 0.0) {
       worldPixelAngle += 360.0;
     } else if (worldPixelAngle > 360.0) // UGLY, but it works
@@ -389,10 +391,10 @@ void Draw(GameResources *res, uint32_t const frameTime[2]) {
     // (worldPixelAngle - 180.0) / 180.0) : (worldPixelAngle / 180.0);
 
     float const finalCoord =
-        (worldPixelAngle / 90.0) - std::floor(worldPixelAngle / 90.0);
+        (worldPixelAngle / 90.0f) - std::floorf(worldPixelAngle / 90.0f);
 
     DrawColumn(display, res->skyTranspose, i, 0, display->h / 2 + 1,
-               finalCoord * res->skyTranspose->h, 0, res->skyTranspose->w);
+               size_t(finalCoord * float(res->skyTranspose->h)), 0, res->skyTranspose->w);
   }
 
   // Render floor
