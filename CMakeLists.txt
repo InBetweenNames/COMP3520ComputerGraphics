@@ -34,7 +34,7 @@ endif()
 #Default to full warnings
 target_compile_options(main
   PRIVATE
-  $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-Wall;-Werror>
+  $<$<OR:$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-Wall;-Werror>
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
