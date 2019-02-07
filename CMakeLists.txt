@@ -38,13 +38,41 @@ target_compile_options(main
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
-#Default to C++14 -- no effect on C code (emscripten is limited to C++14 for now)
-target_compile_features(main PUBLIC cxx_std_14)
+#Default to C++17 -- no effect on C code
+target_compile_features(main PUBLIC cxx_std_17)
 
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
+
+  #Ensure Release builds have full optimization enabled
+  string(REPLACE "O2" "O3" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+  string(REPLACE "O2" "O3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+  string(REPLACE "O2" "O3" CMAKE_C_FLAGS_RELWITHDEBINFO
+    "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+  string(REPLACE "O2" "O3" CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+
+  string(REPLACE "O2" "O3" CMAKE_EXE_LINKER_FLAGS_RELEASE
+    "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
+  string(REPLACE "O2" "O3" CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO}")
+
+  string(REPLACE "O2" "O3" CMAKE_SHARED_LINKER_FLAGS_RELEASE
+    "${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
+  string(REPLACE "O2" "O3" CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO
+    "${CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO}")
+
+  string(REPLACE "O2" "O3" CMAKE_MODULE_LINKER_FLAGS_RELEASE
+    "${CMAKE_MODULE_LINKER_FLAGS_RELEASE}")
+  string(REPLACE "O2" "O3" CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO
+    "${CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO}")
+
+  #Emscripten supports C++17, but upstream doesn't have the configuration added
+  #TODO: make pull request upstream to Emscripten.cmake to add this
+  set(CMAKE_CXX17_COMPILE_FEATURES "cxx_std_17")
+  
   set(CMAKE_EXECUTABLE_SUFFIX ".html") 
-  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s WASM=1 -s EXIT_RUNTIME=1 --preload-file iosevka-regular.ttf")
+  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s EXIT_RUNTIME=1 --preload-file iosevka-regular.ttf --preload-file sky.bmp --preload-file floor.bmp")
   set_target_properties(main PROPERTIES LINK_FLAGS "${ECXXFLAGS} --emrun")
   set_target_properties(main PROPERTIES COMPILE_FLAGS "${ECXXFLAGS}")
 else ()
