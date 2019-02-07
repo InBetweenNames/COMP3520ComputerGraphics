@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <stdexcept>
+
 #define M_PI_F 3.14159265358979323846264338327950288f
 
 #ifdef __EMSCRIPTEN__
@@ -58,6 +60,7 @@ struct GameResources
     SDL_Surface* display;
     SDL_Surface* floor;
     SDL_Surface* skyTranspose;
+    SDL_Surface* wallTranspose;
     TTF_Font* font;
     uint32_t windowID;
 };
@@ -67,6 +70,7 @@ void FreeGameResources(GameResources* res)
     TTF_CloseFont(res->font);
     SDL_FreeSurface(res->floor);
     SDL_FreeSurface(res->skyTranspose);
+    SDL_FreeSurface(res->wallTranspose);
     SDL_FreeSurface(res->display);
     SDL_DestroyTexture(res->texture);
     SDL_DestroyRenderer(res->renderer);
@@ -372,6 +376,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     SDL_Surface* display = res->display;
 
     // Render sky
+    // TODO: sky texture is being rendered flipped possibly.  Need to investigate.
     for (size_t i = 0; i < (size_t)display->w; ++i)
     {
         // Treat sky as being projected in a cylinder, with deformation happening
@@ -406,6 +411,8 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     {
         DrawSpan(display, res->floor, 0, render.xres - 1, i);
     }
+
+    // Render a single wall
 
     // Render FPS
     static char frameTimeString[128];
@@ -443,7 +450,7 @@ void GameLoop(void* const arg)
         std::exit(0); // Reason for not plain returning: emscripten won't call
                       // global destructors when main or the main loop exits.
     }
-    
+
     MovePlayer(prevFrameTime[1] - prevFrameTime[0]);
 
     Draw(res, prevFrameTime);
@@ -462,6 +469,29 @@ void GameLoop(void* const arg)
     // MovePlayer(prevFrameTime[1] - prevFrameTime[0]);
     // MovePlayer(16);
 }
+
+SDL_Surface* LoadTexture(char const* filename, SDL_PixelFormat const* const dstformat)
+{
+    SDL_Surface* tmp = SDL_LoadBMP(filename);
+
+    if (tmp == nullptr)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load %s!\n", filename);
+        throw std::runtime_error("Couldn't load texture");
+    }
+
+    SDL_Surface* result = SDL_ConvertSurface(tmp, dstformat, 0);
+    if (result == nullptr)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not convert surface for %s!\n", filename);
+        throw std::runtime_error("Couldn't load texture");
+    }
+
+    SDL_FreeSurface(tmp);
+
+    return result;
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -502,7 +532,7 @@ int main(int argc, char* argv[])
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "could not create renderer: %s\n", SDL_GetError());
         return 1;
     }
-    
+
     res.display = SDL_CreateRGBSurfaceWithFormat(0, render.xres, render.yres, 32, SDL_PIXELFORMAT_RGBA8888);
     if (res.display == nullptr)
     {
@@ -527,34 +557,11 @@ int main(int argc, char* argv[])
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "TTF_OpenFont: %s\n", TTF_GetError());
         return 1;
     }
+    
+    res.floor = LoadTexture("floor.bmp", res.display->format);
+    res.skyTranspose = LoadTexture("sky.bmp", res.display->format);
+    res.wallTranspose = LoadTexture("wall.bmp", res.display->format);
 
-    {
-        SDL_Surface* tmp = SDL_LoadBMP("floor.bmp");
-
-        if (tmp == nullptr)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load floor.bmp!\n");
-            return 1;
-        }
-
-        res.floor = SDL_ConvertSurface(tmp, res.display->format, 0);
-
-        SDL_FreeSurface(tmp);
-    }
-
-    {
-        SDL_Surface* tmp = SDL_LoadBMP("sky.bmp");
-
-        if (tmp == nullptr)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load sky.bmp!\n");
-            return 1;
-        }
-
-        res.skyTranspose = SDL_ConvertSurface(tmp, res.display->format, 0);
-
-        SDL_FreeSurface(tmp);
-    }
 
     emscripten_set_main_loop_arg(GameLoop, &res, 0, 1);
 
