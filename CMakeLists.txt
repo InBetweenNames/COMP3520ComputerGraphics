@@ -41,9 +41,14 @@ target_compile_options(main
 #Default to C++17 -- no effect on C code
 target_compile_features(main PUBLIC cxx_std_17)
 
+#Provide option to force O3 for RelWithDebInfo
+if (RELWITHDEBINFO_FORCE_OPTIMIZATION_O3)
+    string(REPLACE "-O2" "-O3" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+    string(REPLACE "-O2" "-O3" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+endif()
+
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
-
   #Ensure Release builds have full optimization enabled
   string(REPLACE "O2" "O3" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
   string(REPLACE "O2" "O3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
