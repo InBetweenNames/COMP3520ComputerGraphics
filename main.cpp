@@ -434,8 +434,6 @@ void GameLoop(void* const arg)
     prevFrameTime[0] = prevFrameTime[1];
     prevFrameTime[1] = SDL_GetTicks();
 
-    MovePlayer(prevFrameTime[1] - prevFrameTime[0]);
-
     if (ProcessEvent(res->windowID) == 0)
     {
         FreeGameResources(res);
@@ -445,6 +443,8 @@ void GameLoop(void* const arg)
         std::exit(0); // Reason for not plain returning: emscripten won't call
                       // global destructors when main or the main loop exits.
     }
+    
+    MovePlayer(prevFrameTime[1] - prevFrameTime[0]);
 
     Draw(res, prevFrameTime);
     SDL_UpdateTexture(res->texture, nullptr, res->display->pixels, res->display->pitch);
