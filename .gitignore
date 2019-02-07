@@ -16,4 +16,7 @@ CTestTestfile.cmake
 *.wasm
 *.html
 *.data
+*.ninja
+.ninja_deps
+.ninja_log
 main

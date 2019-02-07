@@ -1,0 +1,16 @@
+﻿---
+BasedOnStyle: LLVM
+AlignEscapedNewlines: Left
+BreakBeforeBraces: Allman
+ColumnLimit: '120'
+Cpp11BracedListStyle: 'true'
+ExperimentalAutoDetectBinPacking: 'true'
+FixNamespaceComments: 'false'
+IndentWidth: '4'
+Language: Cpp
+PointerAlignment: Left
+ReflowComments: 'true'
+SortIncludes: 'true'
+Standard: Cpp11
+
+...
