@@ -47,6 +47,9 @@ if (RELWITHDEBINFO_FORCE_OPTIMIZATION_O3)
     string(REPLACE "-O2" "-O3" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
 endif()
 
+#Directory all assets are contained in
+set(ASSETS "${PROJECT_SOURCE_DIR}/assets")
+
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   #Ensure Release builds have full optimization enabled
@@ -77,7 +80,7 @@ if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   set(CMAKE_CXX17_COMPILE_FEATURES "cxx_std_17")
   
   set(CMAKE_EXECUTABLE_SUFFIX ".html") 
-  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s EXIT_RUNTIME=1 --preload-file iosevka-regular.ttf --preload-file sky.bmp --preload-file floor.bmp")
+  set(ECXXFLAGS "-s USE_SDL=2 -s USE_SDL_TTF=2 -s EXIT_RUNTIME=1 --preload-file ${ASSETS}@../assets")
   set_target_properties(main PROPERTIES LINK_FLAGS "${ECXXFLAGS} --emrun")
   set_target_properties(main PROPERTIES COMPILE_FLAGS "${ECXXFLAGS}")
 else ()

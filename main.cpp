@@ -492,7 +492,6 @@ SDL_Surface* LoadTexture(char const* filename, SDL_PixelFormat const* const dstf
     return result;
 }
 
-
 int main(int argc, char* argv[])
 {
     // VERY IMPORTANT: Ensure SDL2 is initialized
@@ -551,17 +550,16 @@ int main(int argc, char* argv[])
 
     // Just in case you need text:
     // load iosevka-regular.ttf at a large size into font
-    res.font = TTF_OpenFont("iosevka-regular.ttf", 16);
+    res.font = TTF_OpenFont("../assets/iosevka-regular.ttf", 16);
     if (res.font == nullptr)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "TTF_OpenFont: %s\n", TTF_GetError());
         return 1;
     }
-    
-    res.floor = LoadTexture("floor.bmp", res.display->format);
-    res.skyTranspose = LoadTexture("sky.bmp", res.display->format);
-    res.wallTranspose = LoadTexture("wall.bmp", res.display->format);
 
+    res.floor = LoadTexture("../assets/floor.bmp", res.display->format);
+    res.skyTranspose = LoadTexture("../assets/sky.bmp", res.display->format);
+    res.wallTranspose = LoadTexture("../assets/wall.bmp", res.display->format);
 
     emscripten_set_main_loop_arg(GameLoop, &res, 0, 1);
 
