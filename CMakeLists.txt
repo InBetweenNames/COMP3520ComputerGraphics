@@ -96,6 +96,11 @@ else ()
     ${SDL2_INCLUDE_DIRS}
     ${SDL2_TTF_INCLUDE_DIR}
   )
+  
+  #CMake-built SDL2 doesn't define SDL2_LIBRARIES while autotools-built SDL2 does
+  if (NOT DEFINED SDL2_LIBRARIES)
+    set(SDL2_LIBRARIES "SDL2::SDL2")
+  endif()
 
   target_link_libraries(main
     PUBLIC
