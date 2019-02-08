@@ -518,6 +518,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
         spriteSelect = 7;
     }
 
+    // TODO: figure out the actual transformation
     RenderSprite(display, res->doomGuy[7 - spriteSelect], 550, 50, 0);
 }
 
