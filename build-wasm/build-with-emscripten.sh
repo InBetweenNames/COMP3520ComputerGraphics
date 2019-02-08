@@ -7,4 +7,4 @@ if [[ -z $(which emcmake) ]]; then
   exit 1
 fi
 
-emcmake cmake .. && cmake --build . && emrun main.html
+emcmake cmake -DEigen3_DIR=/usr/share/eigen3/cmake .. && cmake --build . && emrun main.html

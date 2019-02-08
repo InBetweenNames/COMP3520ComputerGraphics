@@ -66,6 +66,7 @@ struct GameResources
     SDL_Surface* columnSprite;
     SDL_Surface* healthSprite;
     SDL_Surface* vialSprite;
+    SDL_Surface* doomGuy[8];
     TTF_Font* font;
     uint32_t windowID;
 };
@@ -80,6 +81,10 @@ void FreeGameResources(GameResources* res)
     SDL_FreeSurface(res->columnSprite);
     SDL_FreeSurface(res->healthSprite);
     SDL_FreeSurface(res->vialSprite);
+    for (size_t i = 0; i < 8; i++)
+    {
+        SDL_FreeSurface(res->doomGuy[i]);
+    }
     SDL_DestroyTexture(res->texture);
     SDL_DestroyRenderer(res->renderer);
     SDL_DestroyWindow(res->window);
@@ -122,7 +127,7 @@ struct direction
 
     // Player speed
     float speed; // Units per millisecond
-} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f}, 80.0f, 400.0f, 192.0f / 1000.0f};
+} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f}, 48.0f, 400.0f, 192.0f / 1000.0f};
 
 void MovePlayer(int timediff)
 {
@@ -216,6 +221,7 @@ int ProcessEvent(uint32_t windowID)
                 break;
             case SDLK_h:         // viewer-to-camera distance increase (zoom in)
                 move.cdiff += e; // slower
+                break;
             default:
                 break;
             }
@@ -380,8 +386,6 @@ void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspos
 void RenderSprite(SDL_Surface* display, SDL_Surface* const sprite, float const x, float const z,
                   int const hOffset) noexcept
 {
-    SDL_Rect finalRect = {};
-
     Eigen::Matrix3f viewInverse = Eigen::Matrix3f::Identity();
     viewInverse.topLeftCorner<1, 2>() = dir.n.transpose();
     viewInverse.block<1, 2>(1, 0) = dir.p.transpose();
@@ -410,15 +414,17 @@ void RenderSprite(SDL_Surface* display, SDL_Surface* const sprite, float const x
     auto const xMin = (sMin * c) / d;
     auto const xMax = (sMax * c) / d;
 
-    auto const screenTop = display->h / 2 - yTop;
-    // auto const screenBot = display->h - yBot;
-    auto const screenXMin = display->w / 2 + xMin;
-    // auto const screenXMax = display->h + xMax;
+    int const screenTop = display->h / 2 - yTop;
+    // int const screenBot = display->h / 2 - yBot;
+    int const screenXMin = display->w / 2 + xMin;
+    // int const screenXMax = display->w / 2 + xMax;
 
-    finalRect.h = int(yTop - yBot);
-    finalRect.w = int(xMax - xMin);
-    finalRect.x = int(screenXMin);
-    finalRect.y = int(screenTop);
+    // TODO: replace this with custom blitting routine
+    SDL_Rect finalRect;
+    finalRect.h = yTop - yBot;
+    finalRect.w = xMax - xMin;
+    finalRect.x = screenXMin;
+    finalRect.y = screenTop;
 
     SDL_BlitScaled(sprite, nullptr, display, &finalRect);
 }
@@ -482,11 +488,36 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     }
 
     // Render sprites
-    // Column
+
+    // Objects
     RenderSprite(display, res->columnSprite, 500, 0, 0);
     RenderSprite(display, res->vialSprite, 500, 100, 0);
     RenderSprite(display, res->healthSprite, 500, 200, 0);
     RenderSprite(display, res->columnSprite, 500, 300, 0);
+
+    // Doomguy
+    // Assume doomguy is facing [-1 0]
+    Eigen::Vector2f doomGuyOrient{-1, 0};
+    auto const dot = dir.p.dot(doomGuyOrient);
+    auto const det = dir.p(0) * doomGuyOrient(1) - dir.p(1) * doomGuyOrient(0);
+    auto angle = std::atan2(det, dot) - (M_PI_F / 8);
+
+    /*if (angle < 0)
+    {
+        angle += 2 * M_PI_F;
+    }*/
+
+    int spriteSelect = 4 + std::floor((angle) / (M_PI_F / 4));
+    if (spriteSelect >= 8)
+    {
+        spriteSelect = 0;
+    }
+    if (spriteSelect < 0)
+    {
+        spriteSelect = 7;
+    }
+
+    RenderSprite(display, res->doomGuy[7 - spriteSelect], 550, 50, 0);
 }
 
 void GameLoop(void* const arg)
@@ -620,6 +651,13 @@ int main(int argc, char* argv[])
     res.healthSprite = LoadTexture("../assets/health.bmp", res.display->format);
     res.vialSprite = LoadTexture("../assets/vial.bmp", res.display->format);
     res.columnSprite = LoadTexture("../assets/column.bmp", res.display->format);
+
+    char pathBuf[128];
+    for (size_t i = 0; i < 8; i++)
+    {
+        snprintf(pathBuf, 128, "../assets/playa%zu.bmp", i + 1);
+        res.doomGuy[i] = LoadTexture(pathBuf, res.display->format);
+    }
 
     if (SDL_SetSurfaceBlendMode(res.display, SDL_BLENDMODE_BLEND) < 0)
     {
