@@ -1,6 +1,8 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#include <Eigen/Dense>
+
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -61,6 +63,9 @@ struct GameResources
     SDL_Surface* floor;
     SDL_Surface* skyTranspose;
     SDL_Surface* wallTranspose;
+    SDL_Surface* columnSprite;
+    SDL_Surface* healthSprite;
+    SDL_Surface* vialSprite;
     TTF_Font* font;
     uint32_t windowID;
 };
@@ -72,6 +77,9 @@ void FreeGameResources(GameResources* res)
     SDL_FreeSurface(res->skyTranspose);
     SDL_FreeSurface(res->wallTranspose);
     SDL_FreeSurface(res->display);
+    SDL_FreeSurface(res->columnSprite);
+    SDL_FreeSurface(res->healthSprite);
+    SDL_FreeSurface(res->vialSprite);
     SDL_DestroyTexture(res->texture);
     SDL_DestroyRenderer(res->renderer);
     SDL_DestroyWindow(res->window);
@@ -97,19 +105,16 @@ struct movement
 struct direction
 {
     // Direction vector
-    float px;
-    float py;
+    Eigen::Vector2f p;
 
     // Normal vector (must point east in screenspace)
-    float nx;
-    float ny;
+    Eigen::Vector2f n;
 
     // Player angle from X axis
     float theta;
 
     // Player position
-    float xpos;
-    float ypos;
+    Eigen::Vector2f pos;
 
     // Camera properties
     float hpos; // Height
@@ -117,23 +122,21 @@ struct direction
 
     // Player speed
     float speed; // Units per millisecond
-} dir = {1.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 80.0f, 400.0f, 192.0f / 1000.0f};
+} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f}, 80.0f, 400.0f, 192.0f / 1000.0f};
 
 void MovePlayer(int timediff)
 {
-    dir.px = std::cos((dir.theta / 180.0f) * M_PI_F);
-    dir.py = std::sin((dir.theta / 180.0f) * M_PI_F);
+    dir.p.x() = std::cos((dir.theta / 180.0f) * M_PI_F);
+    dir.p.y() = std::sin((dir.theta / 180.0f) * M_PI_F);
 
-    dir.nx = dir.py;
-    dir.ny = -dir.px;
+    dir.n.x() = dir.p.y();
+    dir.n.y() = -dir.p.x();
 
     // Travel along normal
-    dir.xpos += move.xdiff * dir.speed * timediff * dir.nx;
-    dir.ypos += move.xdiff * dir.speed * timediff * dir.ny;
+    dir.pos += dir.speed * timediff * move.xdiff * dir.n;
 
     // Travel along direction vector
-    dir.xpos += move.ydiff * dir.speed * timediff * dir.px;
-    dir.ypos += move.ydiff * dir.speed * timediff * dir.py;
+    dir.pos += dir.speed * timediff * move.ydiff * dir.p;
 
     dir.hpos += move.hdiff * dir.speed * timediff;
     dir.cpos += move.cdiff * dir.speed * timediff;
@@ -260,12 +263,14 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
     x2 = x2 - surface->w / 2; // East of screen is positive
 
     //(tx, ty) = (h/y)(c*d + x*n) + pos
-    float ty = (dir.hpos / y) * (dir.cpos * dir.py + x1 * dir.ny) + dir.ypos;
-    float tx = (dir.hpos / y) * (dir.cpos * dir.px + x1 * dir.nx) + dir.xpos;
+    // float ty = (dir.hpos / y) * (dir.cpos * dir.p.y() + x1 * dir.n.y()) + dir.pos.y();
+    // float tx = (dir.hpos / y) * (dir.cpos * dir.p.x() + x1 * dir.n.x()) + dir.pos.x();
+    Eigen::Vector2f t = (dir.hpos / y) * (dir.cpos * dir.p + x1 * dir.n) + dir.pos;
 
     //(dx, dy) = (h/y)(n)
-    float xfrac = (dir.hpos / y) * (dir.nx);
-    float yfrac = (dir.hpos / y) * (dir.ny);
+    // float xfrac = (dir.hpos / y) * (dir.n.x());
+    // float yfrac = (dir.hpos / y) * (dir.n.y());
+    Eigen::Vector2f frac = dir.hpos * dir.n / y;
 
     // printf("(xfrac, yfrac) = (%lf,%lf)\n", xfrac, yfrac);
 
@@ -339,16 +344,17 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
     flipped to solve this, or subtract by 64 for positive case and
     not for the negative case.
     */
-        uint32_t uintty = uint32_t(int32_t(ty)) & 0x3F;
-        uint32_t uinttx = uint32_t(int32_t(tx)) & 0x3F;
+        uint32_t uintty = uint32_t(int32_t(t.y())) & 0x3F;
+        uint32_t uinttx = uint32_t(int32_t(t.x())) & 0x3F;
 
-        uint32_t* src = ((Uint32*)tex->pixels) + uintty * 64 + uinttx;
+        uint32_t* src = ((uint32_t*)tex->pixels) + uintty * 64 + uinttx;
 
         *dst = *src;
         // Increment
         dst++;
-        tx += xfrac;
-        ty += yfrac;
+        t += frac;
+        // tx += xfrac;
+        // ty += yfrac;
 
         --count;
     }
@@ -369,6 +375,52 @@ void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspos
 
         ti += yFrac;
     }
+}
+
+void RenderSprite(SDL_Surface* display, SDL_Surface* const sprite, float const x, float const z,
+                  int const hOffset) noexcept
+{
+    SDL_Rect finalRect = {};
+
+    Eigen::Matrix3f viewInverse = Eigen::Matrix3f::Identity();
+    viewInverse.topLeftCorner<1, 2>() = dir.n.transpose();
+    viewInverse.block<1, 2>(1, 0) = dir.p.transpose();
+    viewInverse.topRightCorner<2, 1>() = viewInverse.topLeftCorner<2, 2>() * (-dir.pos);
+
+    Eigen::Vector3f viewSpritePos = viewInverse * Eigen::Vector3f{x, z, 1};
+
+    auto const halfWidth = sprite->w / 2;
+
+    auto const sCentre = viewSpritePos.x();
+    auto const sMin = sCentre - halfWidth;
+    auto const sMax = sCentre + halfWidth;
+
+    auto const d = viewSpritePos.y();
+    auto const c = dir.cpos;
+
+    // centre_x = s/d * c
+
+    // auto const xCentre = (s / d) * c;
+    auto const hTop = float(sprite->h + hOffset) - dir.hpos;
+    auto const hBot = float(hOffset) - dir.hpos;
+
+    auto const yTop = (hTop * c) / d;
+    auto const yBot = (hBot * c) / d;
+
+    auto const xMin = (sMin * c) / d;
+    auto const xMax = (sMax * c) / d;
+
+    auto const screenTop = display->h / 2 - yTop;
+    // auto const screenBot = display->h - yBot;
+    auto const screenXMin = display->w / 2 + xMin;
+    // auto const screenXMax = display->h + xMax;
+
+    finalRect.h = int(yTop - yBot);
+    finalRect.w = int(xMax - xMin);
+    finalRect.x = int(screenXMin);
+    finalRect.y = int(screenTop);
+
+    SDL_BlitScaled(sprite, nullptr, display, &finalRect);
 }
 
 void Draw(GameResources* res, uint32_t const frameTime[2])
@@ -412,8 +464,6 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
         DrawSpan(display, res->floor, 0, render.xres - 1, i);
     }
 
-    // Render a single wall
-
     // Render FPS
     static char frameTimeString[128];
 
@@ -430,6 +480,13 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
         SDL_FreeSurface(fpsGauge);
     }
+
+    // Render sprites
+    // Column
+    RenderSprite(display, res->columnSprite, 500, 0, 0);
+    RenderSprite(display, res->vialSprite, 500, 100, 0);
+    RenderSprite(display, res->healthSprite, 500, 200, 0);
+    RenderSprite(display, res->columnSprite, 500, 300, 0);
 }
 
 void GameLoop(void* const arg)
@@ -560,6 +617,15 @@ int main(int argc, char* argv[])
     res.floor = LoadTexture("../assets/floor.bmp", res.display->format);
     res.skyTranspose = LoadTexture("../assets/sky.bmp", res.display->format);
     res.wallTranspose = LoadTexture("../assets/wall.bmp", res.display->format);
+    res.healthSprite = LoadTexture("../assets/health.bmp", res.display->format);
+    res.vialSprite = LoadTexture("../assets/vial.bmp", res.display->format);
+    res.columnSprite = LoadTexture("../assets/column.bmp", res.display->format);
+
+    if (SDL_SetSurfaceBlendMode(res.display, SDL_BLENDMODE_BLEND) < 0)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetSurfaceBlendMode: %s\n", SDL_GetError());
+        return 1;
+    }
 
     emscripten_set_main_loop_arg(GameLoop, &res, 0, 1);
 

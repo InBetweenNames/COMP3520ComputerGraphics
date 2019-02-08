@@ -50,6 +50,10 @@ endif()
 #Directory all assets are contained in
 set(ASSETS "${PROJECT_SOURCE_DIR}/assets")
 
+#Use Eigen
+find_package (Eigen3 3.3.7 REQUIRED NO_MODULE)
+target_link_libraries (main PRIVATE Eigen3::Eigen)
+
 #Special: handle emscripten for running in web browser
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   #Ensure Release builds have full optimization enabled
