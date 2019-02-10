@@ -498,8 +498,9 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     // Doomguy
     // Assume doomguy is facing [-1 0]
     Eigen::Vector2f doomGuyOrient{-1, 0};
-    auto const dot = dir.p.dot(doomGuyOrient);
-    auto const det = dir.p(0) * doomGuyOrient(1) - dir.p(1) * doomGuyOrient(0);
+    Eigen::Vector2f playerToDoomGuy = Eigen::Vector2f{550, 50} - dir.pos;
+    auto const dot = playerToDoomGuy.dot(doomGuyOrient);
+    auto const det = playerToDoomGuy(0) * doomGuyOrient(1) - playerToDoomGuy(1) * doomGuyOrient(0);
     auto angle = std::atan2(det, dot) - (M_PI_F / 8);
 
     /*if (angle < 0)
