@@ -13,6 +13,9 @@
 
 #define M_PI_F 3.14159265358979323846264338327950288f
 
+template<typename T>
+using AlignedVector = std::vector<T, Eigen::aligned_allocator<T>>;
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 static constexpr float mouseSensitivity = 1;
@@ -85,7 +88,7 @@ struct GameResources
     SDL_Surface* doomGuy[8];
     TTF_Font* font;
 
-    std::vector<Entity, Eigen::aligned_allocator<Entity>> entities;
+    AlignedVector<Entity> entities;
 
     uint32_t windowID;
 
@@ -512,28 +515,14 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     // Sort them
     // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from entities
 
-    std::vector<std::pair<Entity const*, Eigen::Vector4f>,
-                Eigen::aligned_allocator<std::pair<Entity const*, Eigen::Vector4f>>>
-        sorted;
+    AlignedVector<std::pair<SDL_Surface*, Eigen::Vector4f>> sorted;
 
     for (auto const& entity : res->entities)
     {
         Eigen::Vector4f const viewSpritePos = viewInverse * entity.pos.homogeneous();
 
-        sorted.emplace_back(&entity, viewSpritePos);
-
+        sorted.emplace_back(entity.texture, viewSpritePos);
         //
-    }
-
-    // Sort back to front
-    std::sort(sorted.begin(), sorted.end(),
-              [](std::pair<Entity const*, Eigen::Vector4f> const& x, std::pair<Entity const*, Eigen::Vector4f>& y) {
-                  return x.second(1) > y.second(1);
-              });
-
-    for (auto const& sprite : sorted)
-    {
-        RenderSprite(display, sprite.first->texture, sprite.second(0), sprite.second(1), sprite.second(2));
     }
 
     // Doomguy
@@ -561,8 +550,22 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
     // TODO: figure out the actual transformation
     Eigen::Vector4f const doomSpriteViewPos = viewInverse * Eigen::Vector3f{550, 50, 0}.homogeneous();
-    RenderSprite(display, res->doomGuy[7 - spriteSelect], doomSpriteViewPos(0), doomSpriteViewPos(1),
-                 doomSpriteViewPos(2));
+    //RenderSprite(display, res->doomGuy[7 - spriteSelect], doomSpriteViewPos(0), doomSpriteViewPos(1),
+    //             doomSpriteViewPos(2));
+
+    sorted.emplace_back(res->doomGuy[7 - spriteSelect], doomSpriteViewPos);
+
+    // Sort back to front
+    std::sort(sorted.begin(), sorted.end(),
+              [](std::pair<SDL_Surface const*, Eigen::Vector4f> const& x, std::pair<SDL_Surface const*, Eigen::Vector4f> const& y) {
+                  return x.second(1) > y.second(1);
+              });
+
+    for (auto const& sprite : sorted)
+    {
+        RenderSprite(display, sprite.first, sprite.second(0), sprite.second(1), sprite.second(2));
+    }
+
 }
 
 void GameLoop(void* const arg)
