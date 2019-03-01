@@ -525,9 +525,10 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
         //
     }
 
+    // Sort back to front
     std::sort(sorted.begin(), sorted.end(),
               [](std::pair<Entity const*, Eigen::Vector4f> const& x, std::pair<Entity const*, Eigen::Vector4f>& y) {
-                  return x.second(2) < y.second(2);
+                  return x.second(2) > y.second(2);
               });
 
     for (auto const& sprite : sorted)
