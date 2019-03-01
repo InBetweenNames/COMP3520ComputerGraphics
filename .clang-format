@@ -9,8 +9,13 @@ FixNamespaceComments: 'false'
 IndentWidth: '4'
 Language: Cpp
 PointerAlignment: Left
+NamespaceIndentation: All
 ReflowComments: 'true'
 SortIncludes: 'true'
+SortUsingDeclarations: 'true'
 Standard: Cpp11
+TabWidth: '4'
+UseTab: Never
+BreakBeforeBinaryOperators: NonAssignment
 
 ...

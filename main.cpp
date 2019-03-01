@@ -2,6 +2,7 @@
 #include <SDL_ttf.h>
 
 #include <Eigen/Dense>
+#include <Eigen/StdVector>
 
 #include <cmath>
 #include <cstdint>
@@ -54,6 +55,21 @@ void emscripten_set_main_loop_arg(void (*fcn)(void*), void* const arg, uint32_t 
 static constexpr float mouseSensitivity = 0.1f;
 #endif
 
+struct Entity
+{
+    Entity(std::string_view const _name, SDL_Surface* const _texture, Eigen::Vector3f const& _pos) noexcept
+        : name{_name}, texture{_texture}, pos{_pos}
+    {
+    }
+
+    std::string name;
+    SDL_Surface* texture;
+    Eigen::Vector3f pos; // x, y, h
+
+  public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+};
+
 struct GameResources
 {
     SDL_Window* window;
@@ -68,27 +84,30 @@ struct GameResources
     SDL_Surface* vialSprite;
     SDL_Surface* doomGuy[8];
     TTF_Font* font;
-    uint32_t windowID;
-};
 
-void FreeGameResources(GameResources* res)
-{
-    TTF_CloseFont(res->font);
-    SDL_FreeSurface(res->floor);
-    SDL_FreeSurface(res->skyTranspose);
-    SDL_FreeSurface(res->wallTranspose);
-    SDL_FreeSurface(res->display);
-    SDL_FreeSurface(res->columnSprite);
-    SDL_FreeSurface(res->healthSprite);
-    SDL_FreeSurface(res->vialSprite);
-    for (size_t i = 0; i < 8; i++)
+    std::vector<Entity, Eigen::aligned_allocator<Entity>> entities;
+
+    uint32_t windowID;
+
+    ~GameResources() noexcept
     {
-        SDL_FreeSurface(res->doomGuy[i]);
+        TTF_CloseFont(font);
+        SDL_FreeSurface(floor);
+        SDL_FreeSurface(skyTranspose);
+        SDL_FreeSurface(wallTranspose);
+        SDL_FreeSurface(display);
+        SDL_FreeSurface(columnSprite);
+        SDL_FreeSurface(healthSprite);
+        SDL_FreeSurface(vialSprite);
+        for (size_t i = 0; i < 8; i++)
+        {
+            SDL_FreeSurface(doomGuy[i]);
+        }
+        SDL_DestroyTexture(texture);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
     }
-    SDL_DestroyTexture(res->texture);
-    SDL_DestroyRenderer(res->renderer);
-    SDL_DestroyWindow(res->window);
-}
+};
 
 // Render properties
 struct render
@@ -119,17 +138,16 @@ struct direction
     float theta;
 
     // Player position
-    Eigen::Vector2f pos;
+    Eigen::Vector3f pos;
 
     // Camera properties
-    float hpos; // Height
     float cpos; // Distance from lens
 
     // Player speed
     float speed; // Units per millisecond
-} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f}, 48.0f, 400.0f, 192.0f / 1000.0f};
+} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f, 48.0f}, 400.0f, 192.0f / 1000.0f};
 
-void MovePlayer(int timediff)
+void MovePlayer(uint32_t const timediff)
 {
     dir.p.x() = std::cos((dir.theta / 180.0f) * M_PI_F);
     dir.p.y() = std::sin((dir.theta / 180.0f) * M_PI_F);
@@ -138,12 +156,15 @@ void MovePlayer(int timediff)
     dir.n.y() = -dir.p.x();
 
     // Travel along normal
-    dir.pos += dir.speed * timediff * move.xdiff * dir.n;
+    dir.pos.topRows<2>() += dir.speed * timediff * move.xdiff * dir.n;
 
     // Travel along direction vector
-    dir.pos += dir.speed * timediff * move.ydiff * dir.p;
+    dir.pos.topRows<2>() += dir.speed * timediff * move.ydiff * dir.p;
 
-    dir.hpos += move.hdiff * dir.speed * timediff;
+    // Move height of camera
+    dir.pos(2) += move.hdiff * dir.speed * timediff;
+
+    // Adjust focal length of camera
     dir.cpos += move.cdiff * dir.speed * timediff;
 }
 
@@ -271,12 +292,12 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
     //(tx, ty) = (h/y)(c*d + x*n) + pos
     // float ty = (dir.hpos / y) * (dir.cpos * dir.p.y() + x1 * dir.n.y()) + dir.pos.y();
     // float tx = (dir.hpos / y) * (dir.cpos * dir.p.x() + x1 * dir.n.x()) + dir.pos.x();
-    Eigen::Vector2f t = (dir.hpos / y) * (dir.cpos * dir.p + x1 * dir.n) + dir.pos;
+    Eigen::Vector2f t = (dir.pos(2) / y) * (dir.cpos * dir.p + x1 * dir.n) + dir.pos.topRows<2>();
 
     //(dx, dy) = (h/y)(n)
     // float xfrac = (dir.hpos / y) * (dir.n.x());
     // float yfrac = (dir.hpos / y) * (dir.n.y());
-    Eigen::Vector2f frac = dir.hpos * dir.n / y;
+    Eigen::Vector2f frac = dir.pos(2) * dir.n / y;
 
     // printf("(xfrac, yfrac) = (%lf,%lf)\n", xfrac, yfrac);
 
@@ -383,36 +404,29 @@ void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspos
     }
 }
 
-void RenderSprite(SDL_Surface* display, SDL_Surface* const sprite, float const x, float const z,
-                  int const hOffset) noexcept
+void RenderSprite(SDL_Surface* display, SDL_Surface* sprite, float const x, float const z, int const h) noexcept
 {
-    Eigen::Matrix3f viewInverse = Eigen::Matrix3f::Identity();
-    viewInverse.topLeftCorner<1, 2>() = dir.n.transpose();
-    viewInverse.block<1, 2>(1, 0) = dir.p.transpose();
-    viewInverse.topRightCorner<2, 1>() = viewInverse.topLeftCorner<2, 2>() * (-dir.pos);
-
-    Eigen::Vector3f viewSpritePos = viewInverse * Eigen::Vector3f{x, z, 1};
 
     auto const halfWidth = sprite->w / 2;
 
-    auto const sCentre = viewSpritePos.x();
+    auto const sCentre = x;
     auto const sMin = sCentre - halfWidth;
     auto const sMax = sCentre + halfWidth;
 
-    auto const d = viewSpritePos.y();
+    auto const d = z;
     auto const c = dir.cpos;
 
     // centre_x = s/d * c
 
     // auto const xCentre = (s / d) * c;
-    auto const hTop = float(sprite->h + hOffset) - dir.hpos;
-    auto const hBot = float(hOffset) - dir.hpos;
+    auto const hTop = float(sprite->h + h);
+    auto const hBot = float(h);
 
-    auto const yTop = (hTop * c) / d;
-    auto const yBot = (hBot * c) / d;
+    int const yTop = static_cast<int>((hTop * c) / d);
+    int const yBot = static_cast<int>((hBot * c) / d);
 
-    auto const xMin = (sMin * c) / d;
-    auto const xMax = (sMax * c) / d;
+    int const xMin = static_cast<int>((sMin * c) / d);
+    int const xMax = static_cast<int>((sMax * c) / d);
 
     int const screenTop = display->h / 2 - yTop;
     // int const screenBot = display->h / 2 - yBot;
@@ -460,8 +474,9 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
         float const finalCoord = (worldPixelAngle / 90.0f) - std::floor(worldPixelAngle / 90.0f);
 
-        DrawColumn(display, res->skyTranspose, i, 0, display->h / 2 + 1,
-                   size_t(finalCoord * float(res->skyTranspose->h)), 0, res->skyTranspose->w);
+        DrawColumn(display, res->skyTranspose, i, 0, static_cast<size_t>(display->h / 2 + 1),
+                   static_cast<size_t>(finalCoord * float(res->skyTranspose->h)), 0,
+                   static_cast<size_t>(res->skyTranspose->w));
     }
 
     // Render floor
@@ -489,16 +504,25 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
     // Render sprites
 
-    // Objects
-    RenderSprite(display, res->columnSprite, 500, 0, 0);
-    RenderSprite(display, res->vialSprite, 500, 100, 0);
-    RenderSprite(display, res->healthSprite, 500, 200, 0);
-    RenderSprite(display, res->columnSprite, 500, 300, 0);
+    Eigen::Matrix4f viewInverse = Eigen::Matrix4f::Identity();
+    viewInverse.topLeftCorner<1, 2>() = dir.n.transpose();
+    viewInverse.block<1, 2>(1, 0) = dir.p.transpose();
+    viewInverse.topRightCorner<3, 1>() = viewInverse.topLeftCorner<3, 3>() * (-dir.pos);
+
+    // Sort them
+    // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from entities
+
+    for (auto const& sprite : res->entities)
+    {
+        Eigen::Vector4f const viewSpritePos = viewInverse * sprite.pos.homogeneous();
+
+        RenderSprite(display, sprite.texture, viewSpritePos(0), viewSpritePos(1), viewSpritePos(2));
+    }
 
     // Doomguy
     // Assume doomguy is facing [-1 0]
     Eigen::Vector2f doomGuyOrient{-1, 0};
-    Eigen::Vector2f playerToDoomGuy = Eigen::Vector2f{550, 50} - dir.pos;
+    Eigen::Vector2f playerToDoomGuy = Eigen::Vector2f{550, 50} - dir.pos.topRows<2>();
     auto const dot = playerToDoomGuy.dot(doomGuyOrient);
     auto const det = playerToDoomGuy(0) * doomGuyOrient(1) - playerToDoomGuy(1) * doomGuyOrient(0);
     auto angle = std::atan2(det, dot) - (M_PI_F / 8);
@@ -508,7 +532,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
         angle += 2 * M_PI_F;
     }*/
 
-    int spriteSelect = 4 + std::floor((angle) / (M_PI_F / 4));
+    int spriteSelect = static_cast<int>(4 + std::floor((angle) / (M_PI_F / 4)));
     if (spriteSelect >= 8)
     {
         spriteSelect = 0;
@@ -519,12 +543,14 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     }
 
     // TODO: figure out the actual transformation
-    RenderSprite(display, res->doomGuy[7 - spriteSelect], 550, 50, 0);
+    Eigen::Vector4f const doomSpriteViewPos = viewInverse * Eigen::Vector3f{550, 50, 0}.homogeneous();
+    RenderSprite(display, res->doomGuy[7 - spriteSelect], doomSpriteViewPos(0), doomSpriteViewPos(1),
+                 doomSpriteViewPos(2));
 }
 
 void GameLoop(void* const arg)
 {
-    GameResources* const res = (GameResources* const)arg;
+    GameResources* const res = static_cast<GameResources* const>(arg);
 
     static uint32_t prevFrameTime[2] = {};
 
@@ -533,7 +559,7 @@ void GameLoop(void* const arg)
 
     if (ProcessEvent(res->windowID) == 0)
     {
-        FreeGameResources(res);
+        // FreeGameResources(res); //browser specific: it handles cleanup
         emscripten_cancel_main_loop();
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Exiting!\n");
         SDL_Quit();
@@ -666,6 +692,12 @@ int main(int argc, char* argv[])
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetSurfaceBlendMode: %s\n", SDL_GetError());
         return 1;
     }
+
+    // Objects
+    res.entities.emplace_back("column1", res.columnSprite, Eigen::Vector3f{500, 0, 0});
+    res.entities.emplace_back("vial", res.vialSprite, Eigen::Vector3f{500, 100, 0});
+    res.entities.emplace_back("health", res.healthSprite, Eigen::Vector3f{500, 200, 0});
+    res.entities.emplace_back("column2", res.columnSprite, Eigen::Vector3f{500, 300, 0});
 
     emscripten_set_main_loop_arg(GameLoop, &res, 0, 1);
 
