@@ -512,11 +512,27 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     // Sort them
     // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from entities
 
-    for (auto const& sprite : res->entities)
-    {
-        Eigen::Vector4f const viewSpritePos = viewInverse * sprite.pos.homogeneous();
+    std::vector<std::pair<Entity const*, Eigen::Vector4f>,
+                Eigen::aligned_allocator<std::pair<Entity*, Eigen::Vector4f>>>
+        sorted;
 
-        RenderSprite(display, sprite.texture, viewSpritePos(0), viewSpritePos(1), viewSpritePos(2));
+    for (auto const& entity : res->entities)
+    {
+        Eigen::Vector4f const viewSpritePos = viewInverse * entity.pos.homogeneous();
+
+        sorted.emplace_back(&entity, viewSpritePos);
+
+        //
+    }
+
+    std::sort(sorted.begin(), sorted.end(),
+              [](std::pair<Entity const*, Eigen::Vector4f> const& x, std::pair<Entity const*, Eigen::Vector4f>& y) {
+                  return x.second(2) < y.second(2);
+              });
+
+    for (auto const& sprite : sorted)
+    {
+        RenderSprite(display, sprite.first->texture, sprite.second(0), sprite.second(1), sprite.second(2));
     }
 
     // Doomguy
@@ -695,7 +711,7 @@ int main(int argc, char* argv[])
 
     // Objects
     res.entities.emplace_back("column1", res.columnSprite, Eigen::Vector3f{500, 0, 0});
-    res.entities.emplace_back("vial", res.vialSprite, Eigen::Vector3f{500, 100, 0});
+    res.entities.emplace_back("vial", res.vialSprite, Eigen::Vector3f{500, 100, 100});
     res.entities.emplace_back("health", res.healthSprite, Eigen::Vector3f{500, 200, 0});
     res.entities.emplace_back("column2", res.columnSprite, Eigen::Vector3f{500, 300, 0});
 
