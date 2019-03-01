@@ -513,7 +513,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from entities
 
     std::vector<std::pair<Entity const*, Eigen::Vector4f>,
-                Eigen::aligned_allocator<std::pair<Entity*, Eigen::Vector4f>>>
+                Eigen::aligned_allocator<std::pair<Entity const*, Eigen::Vector4f>>>
         sorted;
 
     for (auto const& entity : res->entities)
@@ -528,7 +528,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
     // Sort back to front
     std::sort(sorted.begin(), sorted.end(),
               [](std::pair<Entity const*, Eigen::Vector4f> const& x, std::pair<Entity const*, Eigen::Vector4f>& y) {
-                  return x.second(2) > y.second(2);
+                  return x.second(1) > y.second(1);
               });
 
     for (auto const& sprite : sorted)
@@ -712,7 +712,7 @@ int main(int argc, char* argv[])
 
     // Objects
     res.entities.emplace_back("column1", res.columnSprite, Eigen::Vector3f{500, 0, 0});
-    res.entities.emplace_back("vial", res.vialSprite, Eigen::Vector3f{500, 100, 100});
+    res.entities.emplace_back("vial", res.vialSprite, Eigen::Vector3f{500, 100, 25});
     res.entities.emplace_back("health", res.healthSprite, Eigen::Vector3f{500, 200, 0});
     res.entities.emplace_back("column2", res.columnSprite, Eigen::Vector3f{500, 300, 0});
 
