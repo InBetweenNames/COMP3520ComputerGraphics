@@ -13,19 +13,18 @@
 
 #define M_PI_F 3.14159265358979323846264338327950288f
 
-template<typename T>
-using AlignedVector = std::vector<T, Eigen::aligned_allocator<T>>;
+template <typename T> using AlignedVector = std::vector<T, Eigen::aligned_allocator<T>>;
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 static constexpr float mouseSensitivity = 1;
 #else
 
-uint32_t game_running = 0;
+inline uint32_t game_running = 0;
 
 void emscripten_cancel_main_loop() { game_running = 0; }
 
-void emscripten_set_main_loop_arg(void (*fcn)(void*), void* const arg, uint32_t const fps, int const infinite_loop)
+void emscripten_set_main_loop_arg(void (*fcn)(void*), void* const arg, uint32_t const fps, int const)
 {
     uint32_t const MPF = fps > 0 ? 1000 / fps : 1000 / 60; // milliseconds per frame
 
@@ -73,6 +72,48 @@ struct Entity
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
+// Player location, direction, and speed
+struct direction
+{
+    direction() : p{1.0f, 0.0f}, n{0.0f, -1.0f}, theta{0.0f}, pos{0.0f, 0.0f, 48.0f}, c{400.0f}, speed{192.0f / 1000.0f}
+    {
+    }
+
+    // Direction vector
+    Eigen::Vector2f p;
+
+    // Normal vector (must point east in screenspace)
+    Eigen::Vector2f n;
+
+    // Player angle from X axis
+    float theta;
+
+    // Player position
+    Eigen::Vector3f pos;
+
+    // Camera properties
+    float c; // Distance from lens
+
+    // Player speed
+    float speed; // Units per millisecond
+};
+
+// Key states
+struct movement
+{
+    int xdiff; // Whether A(-1) or D(1) is down
+    int ydiff; // Whether W(1) or S(-1) is down
+    int hdiff; // Whether T(1) or G(-1) is down
+    int cdiff; // Whether Y(-1) or H(1) is down
+};
+
+// Render properties
+struct resolution
+{
+    uint16_t xres = 640; // X resolution
+    uint16_t yres = 480; // Y resolution
+};                       // Defaults: 640x480 at 35fps native (DOOM), vsync for emscripten
+
 struct GameResources
 {
     SDL_Window* window;
@@ -89,6 +130,10 @@ struct GameResources
     TTF_Font* font;
 
     AlignedVector<Entity> entities;
+
+    direction dir;
+    movement move = {};
+    resolution render;
 
     uint32_t windowID;
 
@@ -112,45 +157,7 @@ struct GameResources
     }
 };
 
-// Render properties
-struct render
-{
-    uint16_t xres;     // X resolution
-    uint16_t yres;     // Y resolution
-} render = {640, 480}; // Defaults: 640x480 at 35fps native (DOOM), vsync for emscripten
-
-// Key states
-struct movement
-{
-    int xdiff; // Whether A(-1) or D(1) is down
-    int ydiff; // Whether W(1) or S(-1) is down
-    int hdiff; // Whether T(1) or G(-1) is down
-    int cdiff; // Whether Y(-1) or H(1) is down
-} move = {};
-
-// Player location, direction, and speed
-struct direction
-{
-    // Direction vector
-    Eigen::Vector2f p;
-
-    // Normal vector (must point east in screenspace)
-    Eigen::Vector2f n;
-
-    // Player angle from X axis
-    float theta;
-
-    // Player position
-    Eigen::Vector3f pos;
-
-    // Camera properties
-    float cpos; // Distance from lens
-
-    // Player speed
-    float speed; // Units per millisecond
-} dir = {{1.0f, 0.0f}, {0.0f, -1.0f}, 0.0f, {0.0f, 0.0f, 48.0f}, 400.0f, 192.0f / 1000.0f};
-
-void MovePlayer(uint32_t const timediff)
+void MovePlayer(direction& dir, movement& move, uint32_t const timediff)
 {
     dir.p.x() = std::cos((dir.theta / 180.0f) * M_PI_F);
     dir.p.y() = std::sin((dir.theta / 180.0f) * M_PI_F);
@@ -168,10 +175,10 @@ void MovePlayer(uint32_t const timediff)
     dir.pos(2) += move.hdiff * dir.speed * timediff;
 
     // Adjust focal length of camera
-    dir.cpos += move.cdiff * dir.speed * timediff;
+    dir.c += move.cdiff * dir.speed * timediff;
 }
 
-int ProcessEvent(uint32_t windowID)
+int ProcessEvent(direction& dir, movement& move, uint32_t windowID)
 {
     char e = 0;
 
@@ -261,7 +268,7 @@ int ProcessEvent(uint32_t windowID)
                 // Use negative to map positive to west and negative to east (right
                 // handed system)
                 float const worldPixelAngle =
-                    180.0f * (std::atan2(float(event.motion.xrel) * mouseSensitivity, dir.cpos) / M_PI_F);
+                    180.0f * (std::atan2(float(event.motion.xrel) * mouseSensitivity, dir.c) / M_PI_F);
                 dir.theta -= worldPixelAngle;
                 // Ugly, but it works
                 dir.theta /= 360.0f;
@@ -282,9 +289,9 @@ int ProcessEvent(uint32_t windowID)
 // Tex must be 64x64.
 // 0 <= x1 < x <= surface->w.
 // 0 <= y < surface->h.
-void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
+void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, direction& dir, int x1, int x2, int y)
 {
-    uint32_t* dst = ((uint32_t*)surface->pixels) + (surface->w) * y + x1;
+    uint32_t* dst = (static_cast<uint32_t*>(surface->pixels)) + (surface->w) * y + x1;
 
     int count = x2 - x1;
 
@@ -293,9 +300,9 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
     x2 = x2 - surface->w / 2; // East of screen is positive
 
     //(tx, ty) = (h/y)(c*d + x*n) + pos
-    // float ty = (dir.hpos / y) * (dir.cpos * dir.p.y() + x1 * dir.n.y()) + dir.pos.y();
-    // float tx = (dir.hpos / y) * (dir.cpos * dir.p.x() + x1 * dir.n.x()) + dir.pos.x();
-    Eigen::Vector2f t = (dir.pos(2) / y) * (dir.cpos * dir.p + x1 * dir.n) + dir.pos.topRows<2>();
+    // float ty = (dir.hpos / y) * (dir.c * dir.p.y() + x1 * dir.n.y()) + dir.pos.y();
+    // float tx = (dir.hpos / y) * (dir.c * dir.p.x() + x1 * dir.n.x()) + dir.pos.x();
+    Eigen::Vector2f t = (dir.pos(2) / y) * (dir.c * dir.p + x1 * dir.n) + dir.pos.topRows<2>();
 
     //(dx, dy) = (h/y)(n)
     // float xfrac = (dir.hpos / y) * (dir.n.x());
@@ -377,7 +384,7 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
         uint32_t uintty = uint32_t(int32_t(t.y())) & 0x3F;
         uint32_t uinttx = uint32_t(int32_t(t.x())) & 0x3F;
 
-        uint32_t* src = ((uint32_t*)tex->pixels) + uintty * 64 + uinttx;
+        uint32_t* src = static_cast<uint32_t*>(tex->pixels) + uintty * 64 + uinttx;
 
         *dst = *src;
         // Increment
@@ -393,8 +400,8 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, int x1, int x2, int y)
 void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspose, size_t const dx, size_t const dy1,
                 size_t const dy2, size_t const tx, size_t const ty1, size_t const ty2)
 {
-    uint32_t* displayPixels = (uint32_t*)display->pixels;
-    uint32_t* texTPixels = (uint32_t*)texTranspose->pixels;
+    uint32_t* displayPixels = static_cast<uint32_t*>(display->pixels);
+    uint32_t* texTPixels = static_cast<uint32_t*>(texTranspose->pixels);
 
     float const yFrac = float(ty2 - ty1) / float(dy2 - dy1);
 
@@ -407,7 +414,8 @@ void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspos
     }
 }
 
-void RenderSprite(SDL_Surface* display, SDL_Surface* sprite, float const x, float const z, int const h) noexcept
+void RenderSprite(SDL_Surface* display, SDL_Surface* sprite, float const c, float const x, float const z,
+                  int const h) noexcept
 {
 
     auto const halfWidth = sprite->w / 2;
@@ -417,7 +425,7 @@ void RenderSprite(SDL_Surface* display, SDL_Surface* sprite, float const x, floa
     auto const sMax = sCentre + halfWidth;
 
     auto const d = z;
-    auto const c = dir.cpos;
+    // auto const c = dir.c;
 
     // centre_x = s/d * c
 
@@ -446,9 +454,9 @@ void RenderSprite(SDL_Surface* display, SDL_Surface* sprite, float const x, floa
     SDL_BlitScaled(sprite, nullptr, display, &finalRect);
 }
 
-void Draw(GameResources* res, uint32_t const frameTime[2])
+void DrawSky(GameResources* res, SDL_Surface* display)
 {
-    SDL_Surface* display = res->display;
+    auto& dir = res->dir;
 
     // Render sky
     // TODO: sky texture is being rendered flipped possibly.  Need to investigate.
@@ -460,7 +468,7 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
         // image repeats)
 
         // Recall: left side of screen corresponds to +ve
-        float worldPixelAngle = dir.theta + 180.0f * (std::atan2((display->w / 2.0f) - i, dir.cpos) / M_PI_F);
+        float worldPixelAngle = dir.theta + 180.0f * (std::atan2((display->w / 2.0f) - i, dir.c) / M_PI_F);
         if (worldPixelAngle < 0.0f)
         {
             worldPixelAngle += 360.0f;
@@ -481,13 +489,19 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
                    static_cast<size_t>(finalCoord * float(res->skyTranspose->h)), 0,
                    static_cast<size_t>(res->skyTranspose->w));
     }
+}
 
+void DrawFloor(GameResources* res, SDL_Surface* display)
+{
     // Render floor
     for (int i = display->h / 2 + 1; i < display->h; ++i)
     {
-        DrawSpan(display, res->floor, 0, render.xres - 1, i);
+        DrawSpan(display, res->floor, res->dir, 0, res->render.xres - 1, i);
     }
+}
 
+void DrawFPS(GameResources* res, SDL_Surface* display, uint32_t const frameTime[2])
+{
     // Render FPS
     static char frameTimeString[128];
 
@@ -504,8 +518,14 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
         SDL_FreeSurface(fpsGauge);
     }
+}
+
+void DrawSprites(GameResources* res, SDL_Surface* display)
+{
 
     // Render sprites
+
+    auto& dir = res->dir;
 
     Eigen::Matrix4f viewInverse = Eigen::Matrix4f::Identity();
     viewInverse.topLeftCorner<1, 2>() = dir.n.transpose();
@@ -550,22 +570,28 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
     // TODO: figure out the actual transformation
     Eigen::Vector4f const doomSpriteViewPos = viewInverse * Eigen::Vector3f{550, 50, 0}.homogeneous();
-    //RenderSprite(display, res->doomGuy[7 - spriteSelect], doomSpriteViewPos(0), doomSpriteViewPos(1),
-    //             doomSpriteViewPos(2));
 
     sorted.emplace_back(res->doomGuy[7 - spriteSelect], doomSpriteViewPos);
 
     // Sort back to front
     std::sort(sorted.begin(), sorted.end(),
-              [](std::pair<SDL_Surface const*, Eigen::Vector4f> const& x, std::pair<SDL_Surface const*, Eigen::Vector4f> const& y) {
-                  return x.second(1) > y.second(1);
-              });
+              [](std::pair<SDL_Surface const*, Eigen::Vector4f> const& x,
+                 std::pair<SDL_Surface const*, Eigen::Vector4f> const& y) { return x.second(1) > y.second(1); });
 
-    for (auto const& sprite : sorted)
+    for (auto const& [texture, viewpos] : sorted)
     {
-        RenderSprite(display, sprite.first, sprite.second(0), sprite.second(1), sprite.second(2));
+        RenderSprite(display, texture, res->dir.c, viewpos(0), viewpos(1), viewpos(2));
     }
+}
 
+void Draw(GameResources* res, uint32_t const frameTime[2])
+{
+    SDL_Surface* display = res->display;
+
+    DrawSky(res, display);
+    DrawFloor(res, display);
+    DrawSprites(res, display);
+    DrawFPS(res, display, frameTime);
 }
 
 void GameLoop(void* const arg)
@@ -577,7 +603,7 @@ void GameLoop(void* const arg)
     prevFrameTime[0] = prevFrameTime[1];
     prevFrameTime[1] = SDL_GetTicks();
 
-    if (ProcessEvent(res->windowID) == 0)
+    if (ProcessEvent(res->dir, res->move, res->windowID) == 0)
     {
         // FreeGameResources(res); //browser specific: it handles cleanup
         emscripten_cancel_main_loop();
@@ -587,7 +613,7 @@ void GameLoop(void* const arg)
                       // global destructors when main or the main loop exits.
     }
 
-    MovePlayer(prevFrameTime[1] - prevFrameTime[0]);
+    MovePlayer(res->dir, res->move, prevFrameTime[1] - prevFrameTime[0]);
 
     Draw(res, prevFrameTime);
     SDL_UpdateTexture(res->texture, nullptr, res->display->pixels, res->display->pitch);
@@ -628,7 +654,7 @@ SDL_Surface* LoadTexture(char const* filename, SDL_PixelFormat const* const dstf
     return result;
 }
 
-int main(int argc, char* argv[])
+int main(int, char*[])
 {
     // VERY IMPORTANT: Ensure SDL2 is initialized
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0)
@@ -647,8 +673,8 @@ int main(int argc, char* argv[])
     GameResources res;
 
     // This creates the actual window in which graphics are displayed
-    res.window = SDL_CreateWindow("Floor - SDL2 version", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, render.xres,
-                                  render.yres, SDL_WINDOW_SHOWN);
+    res.window = SDL_CreateWindow("Floor - SDL2 version", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                  res.render.xres, res.render.yres, SDL_WINDOW_SHOWN);
 
     if (res.window == nullptr)
     {
@@ -668,15 +694,15 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    res.display = SDL_CreateRGBSurfaceWithFormat(0, render.xres, render.yres, 32, SDL_PIXELFORMAT_RGBA8888);
+    res.display = SDL_CreateRGBSurfaceWithFormat(0, res.render.xres, res.render.yres, 32, SDL_PIXELFORMAT_RGBA8888);
     if (res.display == nullptr)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "could not create surface: %s\n", SDL_GetError());
         return 1;
     }
 
-    res.texture = SDL_CreateTexture(res.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, render.xres,
-                                    render.yres);
+    res.texture = SDL_CreateTexture(res.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING,
+                                    res.render.xres, res.render.yres);
 
     if (res.texture == nullptr)
     {
