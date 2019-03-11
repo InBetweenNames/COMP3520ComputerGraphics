@@ -1,3 +1,5 @@
+﻿#pragma warning(push, 0)
+#pragma warning(disable : ALL_CODE_ANALYSIS_WARNINGS)
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -10,6 +12,7 @@
 #include <cstdlib>
 
 #include <stdexcept>
+#pragma warning(pop)
 
 #define M_PI_F 3.14159265358979323846264338327950288f
 
@@ -196,12 +199,12 @@ void UpdateViewMatrices(direction const& dir, Eigen::Matrix4f& viewInverse, Eige
     // Adjust focal length of camera (TODO: move to projection matrix)
     // dir.c += move.cdiff * dir.speed * timediff;
 
-    // view = Eigen::Matrix4f::Identity(); // not required as view was already initialized to I
-    // float inverseC = 1.0f / viewInverse(3, 3);
+    // view = Eigen::Matrix4f::Identity(); // not required as view was already
+    // initialized to I float inverseC = 1.0f / viewInverse(3, 3);
 
     view.topLeftCorner<3, 3>() = viewInverse.topLeftCorner<3, 3>().transpose();
     view.topRightCorner<3, 1>() = -view.topLeftCorner<3, 3>() * dir.pos; // * inverseC;
-    // view(3, 3) = inverseC;
+                                                                         // view(3, 3) = inverseC;
 }
 
 int ProcessEvent(direction& dir, movement& move, uint32_t windowID)
@@ -331,8 +334,9 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, Eigen::Matrix4f const& vie
     Eigen::Vector2f const position2D = Eigen::Vector2f{viewInverse(0, 3), viewInverse(2, 3)};
 
     //(tx, ty) = (h/y)(c*d + x*n) + pos
-    // float ty = (dir.hpos / y) * (dir.c * dir.p.y() + x1 * dir.n.y()) + dir.pos.y();
-    // float tx = (dir.hpos / y) * (dir.c * dir.p.x() + x1 * dir.n.x()) + dir.pos.x();
+    // float ty = (dir.hpos / y) * (dir.c * dir.p.y() + x1 * dir.n.y()) +
+    // dir.pos.y(); float tx = (dir.hpos / y) * (dir.c * dir.p.x() + x1 *
+    // dir.n.x()) + dir.pos.x();
     Eigen::Vector2f t = (cameraHeight / y) * (c * directionVector + x1 * normalVector) + position2D;
 
     //(dx, dy) = (h/y)(n)
@@ -412,8 +416,8 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, Eigen::Matrix4f const& vie
     flipped to solve this, or subtract by 64 for positive case and
     not for the negative case.
     */
-        uint32_t uintty = uint32_t(int32_t(t.y())) & 0x3F;
-        uint32_t uinttx = uint32_t(int32_t(t.x())) & 0x3F;
+        size_t uintty = size_t(ptrdiff_t(t.y())) & 0x3F;
+        size_t uinttx = size_t(ptrdiff_t(t.x())) & 0x3F;
 
         uint32_t* src = static_cast<uint32_t*>(tex->pixels) + uintty * 64 + uinttx;
 
@@ -428,21 +432,38 @@ void DrawSpan(SDL_Surface* surface, SDL_Surface* tex, Eigen::Matrix4f const& vie
     }
 }
 
-void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspose, size_t const dx, size_t const dy1,
-                size_t const dy2, float const tx, float const ty1, float const ty2)
+void DrawColumn(SDL_Surface* const display, SDL_Surface const* const texTranspose, size_t const dx, ptrdiff_t const dy1,
+                ptrdiff_t const dy2, float const tx, float const ty1, float const ty2)
 {
     uint32_t* displayPixels = static_cast<uint32_t*>(display->pixels);
     uint32_t* texTPixels = static_cast<uint32_t*>(texTranspose->pixels);
 
     size_t const displayWidth = static_cast<size_t>(display->w);
-    float const texTransposeWidth = static_cast<float>(texTranspose->w);
+    size_t const texTransposeWidth = static_cast<size_t>(texTranspose->w);
+    float const texTransposeWidthF = static_cast<float>(texTranspose->w);
+    size_t const texTransposeHeight = static_cast<size_t>(texTranspose->h);
 
-    float const yFrac = float(ty2 - ty1) / float(dy2 - dy1);
+    size_t const tMappedX =
+        static_cast<size_t>(static_cast<ptrdiff_t>(tx * static_cast<float>(texTranspose->h))) % texTransposeHeight;
 
-    float ti = ty1;
-    for (size_t di = dy1; di < dy2; ++di)
+    float const yFrac = (ty2 - ty1) / float(dy2 - dy1);
+
+    uint32_t* texTCol = texTPixels + tMappedX * texTransposeWidth;
+
+    // size_t const mappedCurrTopY = static_cast<size_t>(std::clamp(currTopY, 0.0f, float(display->h)));
+    // size_t const mappedCurrBotY = static_cast<size_t>(std::clamp(currBotY, 0.0f, float(display->h)));
+
+    ptrdiff_t const clampDy1 = std::clamp(dy1, ptrdiff_t(0), static_cast<ptrdiff_t>(display->h));
+    ptrdiff_t const clampDy2 = std::clamp(dy2, ptrdiff_t(0), static_cast<ptrdiff_t>(display->h));
+
+    float ti = ty1 + (clampDy1 - dy1) * (ty2 - ty1) / (dy2 - dy1);
+
+    for (ptrdiff_t di = clampDy1; di < clampDy2; ++di)
     {
-        *(displayPixels + displayWidth * di + dx) = *(texTPixels + static_cast<size_t>(texTransposeWidth * tx + ti));
+        size_t const tMappedY =
+            static_cast<size_t>(static_cast<ptrdiff_t>(ti * texTransposeWidthF)) % texTransposeWidth;
+
+        *(displayPixels + displayWidth * di + dx) = *(texTCol + tMappedY);
 
         ti += yFrac;
     }
@@ -519,9 +540,7 @@ void DrawSky(GameResources* res, SDL_Surface* display)
 
         float const finalCoord = (worldPixelAngle / (M_PI_F / 2)) - std::floor(worldPixelAngle / (M_PI_F / 2));
 
-        DrawColumn(display, res->skyTranspose, i, 0, static_cast<size_t>(display->h / 2 + 1),
-                   static_cast<size_t>(finalCoord * float(res->skyTranspose->h)), 0,
-                   static_cast<size_t>(res->skyTranspose->w));
+        DrawColumn(display, res->skyTranspose, i, 0, static_cast<size_t>(display->h / 2 + 1), finalCoord, 0, 1);
     }
 }
 
@@ -562,7 +581,8 @@ void DrawSprites(GameResources* res, SDL_Surface* display)
     auto& dir = res->dir;
 
     // Sort them
-    // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from entities
+    // std::vector<std::pair<SDL_Surface*, Eigen::Vector2f>> sprites; // get from
+    // entities
 
     AlignedVector<std::pair<SDL_Surface*, Eigen::Vector4f>> sorted;
 
@@ -613,9 +633,176 @@ void DrawSprites(GameResources* res, SDL_Surface* display)
     }
 }
 
-void DrawWall(SDL_Surface const* frontTex, SDL_Surface const* backTex, Eigen::Vector2f const& p1,
-              Eigen::Vector2f const& p2, float const height, direction const& dir, SDL_Surface* display)
+// Eigen::Vector2f clipLinePlane(Eigen::Vector2f const& p1, Eigen::Vector2f const& p2, Eigen::Vector2f const& clip) {}
+
+std::pair<float, float> clipLine(Eigen::Vector4f const& p1, Eigen::Vector4f const& p2, float const c,
+                                 float const halfWidth)
 {
+    Eigen::Vector4f const pH = p2 - p1;
+    Eigen::Vector2f const p = Eigen::Vector2f{pH(0), pH(2)};
+    Eigen::Vector2f const p1_2d = Eigen::Vector2f{p1(0), p1(2)};
+    Eigen::Vector2f const p2_2d = Eigen::Vector2f{p2(0), p2(2)};
+
+    float p1c = 0;
+    float p2c = 1;
+
+    // Eigen::Vector2f const clipLeftP = Eigen::Vector2f{-halfWidth, c};
+    Eigen::Vector2f const clipLeftN = Eigen::Vector2f{c, halfWidth};
+    Eigen::Vector2f const clipRightN = {-c, halfWidth}; // points INWARDS
+
+    float const clipNSqNm = clipLeftN.squaredNorm();
+
+    float const clipLeftInverseP = clipLeftN.dot(p) / clipNSqNm;
+    float const clipLeftInverseP1 = clipLeftN.dot(p1_2d) / clipNSqNm;
+
+    float const clipRightInverseP2 = clipRightN.dot(p2_2d) / clipNSqNm;
+    float const clipRightInverseP = clipRightN.dot(p) / clipNSqNm;
+
+    if (clipLeftInverseP1 < 0)
+    {
+        float const diff = -clipLeftInverseP1;
+        float const t = diff / clipLeftInverseP;
+        p1c = t;
+    }
+
+    if (clipRightInverseP2 < 0)
+    {
+        float const diff = -clipRightInverseP2;
+        float const t = diff / clipRightInverseP;
+        p2c = 1 + t;
+    }
+
+    // STUDY: effect of constant height, interpolation between clipped coordinates relative to unclipped
+    return {p1c, p2c};
+}
+
+void DrawWall(SDL_Surface const* texture, Eigen::Vector2f const& p1, Eigen::Vector2f const& p2, float const offset,
+              float const height, float const c, Eigen::Matrix4f const& view, SDL_Surface* display)
+{
+
+    // Compute p1's view space coordinates
+
+    Eigen::Vector4f const p1EyeBot = view * Eigen::Vector4f{p1(0), offset, p1(1), 1};
+    Eigen::Vector4f const p1EyeTop = view * Eigen::Vector4f{p1(0), offset + height, p1(1), 1};
+    Eigen::Vector4f const p2EyeBot = view * Eigen::Vector4f{p2(0), offset, p2(1), 1};
+    Eigen::Vector4f const p2EyeTop = view * Eigen::Vector4f{p2(0), offset + height, p2(1), 1};
+
+    float const displayWidthF = static_cast<float>(display->w);
+
+    // Eigen::Vector4f const p1ViewXClamped = clipLineViewLeft(p1ViewTop, p2ViewTop, displayWidthF);
+    auto const [p1ClipTop_t, p2ClipTop_t] = clipLine(p1EyeTop, p2EyeTop, c, displayWidthF / 2);
+    auto const [p1ClipBot_t, p2ClipBot_t] = clipLine(p1EyeBot, p2EyeBot, c, displayWidthF / 2);
+
+    if (p1ClipTop_t >= p2ClipTop_t)
+    {
+        return;
+    }
+
+    Eigen::Vector4f const p1ClipTop = p1EyeTop + p1ClipTop_t * (p2EyeTop - p1EyeTop);
+    Eigen::Vector4f const p2ClipTop = p1EyeTop + p2ClipTop_t * (p2EyeTop - p1EyeTop);
+    Eigen::Vector4f const p1ClipBot = p1EyeBot + p1ClipBot_t * (p2EyeBot - p1EyeBot);
+    Eigen::Vector4f const p2ClipBot = p1EyeBot + p2ClipBot_t * (p2EyeBot - p1EyeBot);
+
+    // Perspective division
+    Eigen::Vector4f const p1ProjBot = c * p1ClipBot / p1ClipBot(2);
+    Eigen::Vector4f const p1ProjTop = c * p1ClipTop / p1ClipTop(2);
+    Eigen::Vector4f const p2ProjBot = c * p2ClipBot / p2ClipBot(2);
+    Eigen::Vector4f const p2ProjTop = c * p2ClipTop / p2ClipTop(2);
+
+    // Select texture based on right hand rule
+
+    // SDL_Surface const* selectedTex = p1ProjBot(0) < p2ProjBot(0) ? frontTex : backTex;
+
+    float const p1ProjTopClampedX =
+        std::clamp(std::floor(p1ProjTop(0)), -displayWidthF / 2.0f, displayWidthF / 2.0f - 1);
+    float const p2ProjTopClampedX =
+        std::clamp(std::floor(p2ProjTop(0)), -displayWidthF / 2.0f, displayWidthF / 2.0f - 1);
+
+    // float const p1ProjTopXClamped = std::clamp(p1ProjTop(0), -displayWidthF, displayWidthF);
+    // float const p1ProjTopXClampDiff = p1ProjTopXClamped - p1ProjTop(0);
+    // float const p2ProjTopXClamped = std::clamp(p2ProjTop(0), -displayWidthF, displayWidthF);
+
+    // Select front or back texture depending on p1View.x and p2View.x -- right
+    // hand rule
+
+    float const topXDiff = p2ProjTopClampedX - p1ProjTopClampedX;
+    // float const botXDiff = p2ProjBot(0) - p1ProjBot(0);
+
+    float const topFrac = (p2ProjTop(1) - p1ProjTop(1)) / topXDiff;
+    float const botFrac = (p2ProjBot(1) - p1ProjBot(1)) / topXDiff;
+    // float const texFrac = 1 / topXDiff;
+
+    ptrdiff_t const displayWidth = static_cast<ptrdiff_t>(display->w);
+
+    // ptrdiff_t const startColumnUnclamped = static_cast<ptrdiff_t>(p1ProjTop(0)) + displayWidth / 2;
+    // ptrdiff_t const endColumnUnclamped = static_cast<ptrdiff_t>(p2ProjTop(0)) + displayWidth / 2;
+
+    // ptrdiff_t const startColumn = std::clamp(startColumnUnclamped, ptrdiff_t(0), displayWidth);
+    // ptrdiff_t const endColumn = std::clamp(endColumnUnclamped, ptrdiff_t(0), displayWidth);
+
+    float currProjTopY = p1ProjTop(1);
+
+    // float currProjX = p1ProjTop(0) + p1ProjTopXClampDiff;
+
+    float currTopY = display->h / 2 - currProjTopY;
+
+    float currBotY = display->h / 2 - p1ProjBot(1);
+
+    // float currX = float(startColumn - startColumnUnclamped) / topXDiff;
+
+    Eigen::Vector4f const wallDirUnnormalized4 = p2EyeTop - p1EyeTop;
+    Eigen::Vector2f const wallDirUnnormalized = Eigen::Vector2f{wallDirUnnormalized4(0), wallDirUnnormalized4(2)};
+    float const wallDirSqNm = wallDirUnnormalized.squaredNorm();
+
+    for (float it = p1ProjTopClampedX; it <= p2ProjTopClampedX; it++)
+    {
+        float const depth_i = c * p1ClipTop(1) / currProjTopY;
+        float const disp_i = depth_i * it / c;
+
+        Eigen::Vector2f const projPtUnnormalized =
+            Eigen::Vector2f{disp_i, depth_i} - Eigen::Vector2f{p1ClipBot(0), p1ClipBot(2)};
+
+        float const texT = p1ClipTop_t + wallDirUnnormalized.dot(projPtUnnormalized) / wallDirSqNm;
+
+        ptrdiff_t const i = static_cast<ptrdiff_t>(it) + displayWidth / 2;
+
+        DrawColumn(display, texture, i, static_cast<ptrdiff_t>(currTopY), static_cast<ptrdiff_t>(currBotY), texT, 0, 1);
+
+        currTopY -= topFrac;
+        currProjTopY += topFrac;
+        currBotY -= botFrac;
+        //++currProjX;
+        // currX += texFrac;
+    }
+
+    return;
+}
+
+void DrawTwoSidedWall(SDL_Surface const* frontTex, SDL_Surface const* backTex, Eigen::Vector2f const& p1,
+                      Eigen::Vector2f const& p2, float const offset, float const height, float const c,
+                      Eigen::Matrix4f const& view, SDL_Surface* display)
+{
+    // Compute p1's view space coordinates
+
+    // Eigen::Vector4f const p1EyeBot = view * Eigen::Vector4f{p1(0), offset, p1(1), 1};
+    Eigen::Vector4f const p1EyeTop = view * Eigen::Vector4f{p1(0), offset + height, p1(1), 1};
+    // Eigen::Vector4f const p2EyeBot = view * Eigen::Vector4f{p2(0), offset, p2(1), 1};
+    Eigen::Vector4f const p2EyeTop = view * Eigen::Vector4f{p2(0), offset + height, p2(1), 1};
+
+    Eigen::Vector4f const P = p2EyeTop - p1EyeTop;
+    Eigen::Vector2f const N = {-P(2), P(0)};
+    Eigen::Vector2f const P1 = {p1EyeTop(0), p1EyeTop(2)};
+
+    float const whichSide = P1.dot(N) / N.squaredNorm();
+
+    if (whichSide > 0)
+    {
+        DrawWall(frontTex, p1, p2, offset, height, c, view, display);
+    }
+    else
+    {
+        DrawWall(backTex, p2, p1, offset, height, c, view, display);
+    }
 }
 
 void Draw(GameResources* res, uint32_t const frameTime[2])
@@ -624,8 +811,16 @@ void Draw(GameResources* res, uint32_t const frameTime[2])
 
     DrawSky(res, display);
     DrawFloor(res, display);
-    DrawWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{-300, -300}, Eigen::Vector2f{300, -300},
-             100, res->dir, display);
+    DrawTwoSidedWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{-300, -300},
+                     Eigen::Vector2f{300, -300}, 0, 100, res->dir.c, res->view, display);
+    DrawTwoSidedWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{300, -300},
+                     Eigen::Vector2f{700, -100}, 0, 150, res->dir.c, res->view, display);
+    DrawTwoSidedWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{700, -100},
+                     Eigen::Vector2f{700, 400}, 0, 150, res->dir.c, res->view, display);
+    DrawTwoSidedWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{700, 400},
+                     Eigen::Vector2f{300, 600}, 0, 150, res->dir.c, res->view, display);
+    DrawTwoSidedWall(res->wallFrontTranspose, res->wallBackTranspose, Eigen::Vector2f{300, 600},
+                     Eigen::Vector2f{-300, 600}, 0, 100, res->dir.c, res->view, display);
     DrawSprites(res, display);
     DrawFPS(res, display, frameTime);
 }
@@ -690,7 +885,7 @@ SDL_Surface* LoadTexture(char const* filename, SDL_PixelFormat const* const dstf
     return result;
 }
 
-int main(int, char*[])
+int main(int, char* [])
 {
     // VERY IMPORTANT: Ensure SDL2 is initialized
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0)
