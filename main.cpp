@@ -1,5 +1,7 @@
-﻿#pragma warning(push, 0)
+﻿#if _MSC_VER && !__INTEL_COMPILER
+#pragma warning(push, 0)
 #pragma warning(disable : ALL_CODE_ANALYSIS_WARNINGS)
+#endif
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -12,7 +14,9 @@
 #include <cstdlib>
 
 #include <stdexcept>
+#if _MSC_VER && !__INTEL_COMPILER
 #pragma warning(pop)
+#endif
 
 #define M_PI_F 3.14159265358979323846264338327950288f
 
