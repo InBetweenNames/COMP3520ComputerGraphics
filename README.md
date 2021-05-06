@@ -1,7 +1,7 @@
 UWindsor COMP-3520 SDL2 Project Template (CMake version)
 ===
 
-** For a live demo of this code, [click here](https://inbetweennames.github.io/SDL2TemplateCMake/) **
+# For a live demo of this code, [click here](https://inbetweennames.github.io/COMP3520ComputerGraphics/)
 
 This template is intended for students in the COMP-3520 Introduction to Computer Graphics course
 at the University of Windsor, however it should serve as a useful template for anyone interested in
